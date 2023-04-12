@@ -26,7 +26,7 @@ def main(argv):
     UMDname = ''
     umdp.headerumd()
     try:
-        opts, arg = getopt.getopt(argv,"hf:i:n:")
+        opts, arg = getopt.getopt(argv,"hf:i:s:")
     except getopt.GetoptError:
         print ('umd2xyz.py -f <umdfile> -i <InitialStep> -s <Sampling_Frequency>')
         sys.exit(2)
@@ -40,7 +40,7 @@ def main(argv):
             UMDname = str(arg)
         elif opt in ("-i"):
             firststep = int(arg)
-        elif opt in ("-n"):
+        elif opt in ("-s"):
             iterstep = int(arg)
     if (os.path.isfile(UMDname)):
         print('The first ',firststep, 'timesteps will be discarded')
