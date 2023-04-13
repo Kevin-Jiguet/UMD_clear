@@ -13,19 +13,11 @@ def analysis_clusters(clusters,MyCrystal,ligands,minlife,Nsteps,FileName,rings,T
     ###labels = {'Mg2Si4O9',['4137141516171891929394956979899',start,end,duration]}
     ###print ('checking: indexes',indexes)
     population = {}
-    #population['clusterindex']={} #'clustername':'', 'formula':'', 'word':'', 'begin':0, 'end':0, 'lifetime':1,'composition':[]}
-    #print ('initialization of the population',population,'size of clusters',len(clusters))
     for ii in range(len(clusters)):
-        #print ('snapshot no. ',ii)
-        #labels.append([[' ' for _ in range(2)] for _ in range(len(clusters[ii]))])
         for jj in range(len(clusters[ii])):
-            #print('dealing with cluster',ii,'which is ',clusters[ii][jj])
             word = '' #Will contain which atom of the crystal is in a given molecule (= cluster)
             molecule = '' #Will contain the name of the molecule (= the cluster)
             indexes = [0 for _ in range(len(MyCrystal.elements))] #Will contain how much of each elements are presents in a given cluster
-            #formulalong = ['' for _ in range(len(clusters[ii][jj]))]
-            #print (' current ',ii,jj,' cluster  is ', clusters[ii][jj])
-            #print ('size of cluster',len(clusters[ii][jj]))
             for kk in range(len(clusters[ii][jj])):
                 word = word + str(clusters[ii][jj][kk]) + '-'
                 indexes[MyCrystal.typat[clusters[ii][jj][kk]]] +=1
@@ -34,52 +26,35 @@ def analysis_clusters(clusters,MyCrystal,ligands,minlife,Nsteps,FileName,rings,T
                     molecule = molecule + str(MyCrystal.elements[kk]) + '_' + str(indexes[kk])
             clustername = molecule + '_' + word
             clusterindex = clustername + '_' + str(ii) # name + the index of the snapshot
-            #print ('     ===>  current cluster to parse is ',clustername,' with index',clusterindex)
             flagalive = 0
-                #if len(population)>1:
             for ll in population.keys():
-                #print ('comparing currect cluster ',population[ll]['clustername']) #,' with ',population[kk][clustername])
                 if clustername == population[ll]['clustername']:
-                    #print ('current step',ii,'end of population',population[ll]['end'])
                     if ii - population[ll]['end'] == 1: #If the cluster already existed in the previous snapshot, we increase its length of life by 1
                         population[ll]['end'] += 1
                         population[ll]['lifetime'] += 1
                         
-                        #print (' cluster already exists since',population[ll]['begin'])
                         flagalive = 1
             if flagalive == 0:
-                #print (' cluster doesnt exist')
                 population[clusterindex]={'clustername':clustername, 'formula':molecule, 'word':word, 'begin':ii, 'end':ii, 'lifetime':1,'composition':clusters[ii][jj]}
-#print ('new cluster added: ',population[clusterindex][molecule],population[clusterindex][begin],population[clusterindex][end])
-#print ('new cluster added: ',population[clusterindex])
     FileAll = FileName + '.r' + str(rings) + '.popul.dat'
-    #print ('Population will be written in ',FileAll,' file')
     fa = open(FileAll,'a')
     newstring = 'Formula\t\tBegin(step)\tEnd(step)\tLifetime(fs)\t[Composition]\n'
     fa.write(newstring)
-    #print('Formula - Begin : End : Lifetime - Composition')
     for kk in population.keys():
-        #newstring = population[kk]['formula'] + '\t' + str(population[kk]['begin']*Nsteps) + '\t' + str(population[kk]['end']*Nsteps) + '\t' + str(population[kk]['lifetime']*Nsteps) + '\t' + str(population[kk]['composition']) + '\n'
         if population[kk]['lifetime'] > minlife/float(Nsteps):
             newstring = population[kk]['formula'] + '\t' + str(population[kk]['begin']*Nsteps) + '\t' + str(population[kk]['end']*Nsteps) +'\t' + str(population[kk]['lifetime']*Nsteps*TimeStep) + '\t' + str(population[kk]['composition']) + '\n'
-    #print(population[kk]['formula'],population[kk]['begin']*Nsteps,population[kk]['end']*Nsteps,population[kk]['lifetime']*Nsteps,population[kk]['composition'])
             fa.write(newstring)
     
     statclusters = [['',0,0]]
-    #print('length of statclusters is',len(statclusters))
     for kk in population.keys():
-        #print('treating cluster',population[kk]['formula'])
         ll = 0
         flagnewclust = 0
         while flagnewclust == 0:
-            #print('comparing to cluster',statclusters[ll][0])
             if population[kk]['formula'] == statclusters[ll][0]:
                 statclusters[ll][1] += population[kk]['lifetime']*Nsteps*TimeStep
-                #print('current population is',statclusters[ll][1])
                 flagnewclust = 1
             else:
                 if ll == len(statclusters)-1:
-                    #print('adding new cluster',population[kk]['formula'])
                     statclusters.append([population[kk]['formula'],population[kk]['lifetime']*Nsteps*TimeStep,len(population[kk]['composition'])])
                     flagnewclust = 1
                 else:
@@ -89,7 +64,6 @@ def analysis_clusters(clusters,MyCrystal,ligands,minlife,Nsteps,FileName,rings,T
     for ll in range(1,len(statclusters)):
         totalpop += statclusters[ll][1]
     FileStat = FileName + '.r' + str(rings) + '.stat.dat'
-#print ('Statistics will be written in ',FileStat,' file')
     fs = open(FileStat,'a')
     newstring = 'Cluster\tTime(fs)\tPercent\n'
     fs.write(newstring)
@@ -102,37 +76,24 @@ def neighboring(BooleanMap,ligands,iatom,newcluster):
     newcluster.append(ligands[iatom])
     for jatom in range(len(ligands)):
         if BooleanMap[ligands[iatom]][ligands[jatom]]==1:
-            #print('bond between',ligands[iatom],ligands[jatom])
             BooleanMap[ligands[iatom]][ligands[jatom]]=0
             BooleanMap[ligands[jatom]][ligands[iatom]]=0
-            #print ('next atom',ligands[jatom])
             newcluster=neighboring(BooleanMap,ligands,jatom,newcluster)
     return newcluster
 
 def clustering(BooleanMap,ligands):
-    #print('     clustering: start')
-    #print ('ligands:',ligands)
     neighbors = []
     totNbonds = 0
     for iatom in range(len(ligands)):
-        #print('sum of bonds for atom ',iatom,ligands[iatom],sum(BooleanMap[ligands[iatom]]))
-        #for jatom in range(len(ligands)):
-        #    if BooleanMap[ligands[iatom]][ligands[jatom]] == 1:
-        #        print ('bonded to atom ',jatom)
         if sum(BooleanMap[ligands[iatom]]) == 0:            #this part has to be treated first, as after clustering a lot of bonds are removed from BooleanMap
                                                             # in the neiboring routine
                                                             # and atoms that are bonded would appear as a monoatomic gas
             neighbors.append([ligands[iatom]])
         totNbonds+=sum(BooleanMap[ligands[iatom]])
-    #print("TOTAL #bonds",totNbonds/2)
-    sys.setrecursionlimit(int(totNbonds)) #change the recursion limit ; bugs with totbondsN/2 in some cases
     for iatom in range(len(ligands)):
         if sum(BooleanMap[ligands[iatom]]) > 0:
-            #print('current atom',iatom,ligands[iatom],BooleanMap[ligands[iatom]],sum(BooleanMap[ligands[iatom]]))
             newcluster = []
             newcluster1 = neighboring(BooleanMap,ligands,iatom,newcluster)
-            #print(' end of cluster. last was: ',newcluster1)
-            #print('    same atom after removing bonds',iatom,ligands[iatom],BooleanMap[ligands[iatom]],sum(BooleanMap[ligands[iatom]]))
             newcluster1.sort()
             newcluster = [i[0] for i in itertools.groupby(newcluster1)]
             if len(newcluster)>1:
