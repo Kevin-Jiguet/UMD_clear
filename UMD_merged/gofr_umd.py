@@ -82,7 +82,7 @@ def computeallgofrs(MyCrystal, atoms_coords, discrete, maxlength, gofr, gpu):
     """
     # check type arguments
     coeffs = np.array(MyCrystal.acell, dtype=np.double, order='C')
-    types = np.array(MyCrystal.typat, dtype=np.int, order='C')
+    types = np.array(MyCrystal.typat, dtype=int, order='C')
     discrete = np.double(discrete)
     maxlength = np.double(maxlength)
     # check if calculation is to be done on gpu
