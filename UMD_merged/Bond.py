@@ -83,17 +83,17 @@ def main(argv):
     InputFile = ''
     header = ''
     try:
-        opts, arg = getopt.getopt(argv,"hf:s:l:i:",["fUMDfile","sSampling_Frequency","lMaxLength","iInputFile"])
+        opts, arg = getopt.getopt(argv,"hf:s:i:",["fUMDfile","sSampling_Frequency","iInputFile"])
     except getopt.GetoptError:
-        print ('speciation.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength>-i <InputFile>')
+        print ('Bond.py -f <UMD_filename> -s <Sampling_Frequency> -i <InputFile>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
             print ('computation of bonding map')
-            print ('bond.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife>  -i <InputFile> -r <Rings>')
-            print ('  default values: -f output.umd.dat -s 1 -l 3.0 -m 0 -r 1')
-            print (' the input file contains the bond lengths for the different atom pairs. \n the values overwrite the option -l')
-            print (' rings = 1 default, polymerization, all anions and cations bond to each other; rings = 0 only individual cation-anion groups')
+            print ('bond.py -f <UMD_filename> -s <Sampling_Frequency>  -i <InputFile> ')
+            print ('default values: -f output.umd.dat -s 1')
+            print ('the UMD file contains the position and nature of each atom at each time.'
+            print ('the input file contains the bond lengths for the different atom pairs.')
             sys.exit()
         elif opt in ("-f", "--fUMDfile"):
             UMDname = str(arg)
