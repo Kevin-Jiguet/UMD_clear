@@ -1,0 +1,644 @@
+import sys,getopt,os.path,itertools
+import crystallography as cr
+import umd_process as umdp
+import math
+import time
+from functools import partial
+import concurrent.futures
+
+def read_inputfile(InputFile,MyCrystal):
+    BondTable = [[0.0 for _ in range(MyCrystal.ntypat)] for _ in range(MyCrystal.ntypat)]
+    nolines = 0
+    with open(InputFile) as ff:
+        for line in ff:
+            line=line.strip()
+            entry=line.split()
+            if (len(entry)==3):
+                nolines +=1
+                for ii in range(MyCrystal.ntypat):
+                    if MyCrystal.elements[ii]==entry[0]:
+                        for jj in range(MyCrystal.ntypat):
+                            if MyCrystal.elements[jj]==entry[1]:
+                                BondTable[ii][jj]=float(entry[2])*float(entry[2])
+                                BondTable[jj][ii]=float(entry[2])*float(entry[2])
+    return BondTable
+
+
+def ComputeDistance(Ca,Cb,acell):
+    dx = Ca[0] - Cb[0]
+    dy = Ca[1] - Cb[1]
+    dz = Ca[2] - Cb[2]
+                
+    valx = min(dx**2, (acell[0]-dx)**2, (acell[0]+dx)**2)
+    valy = min(dy**2, (acell[1]-dy)**2, (acell[1]+dy)**2)
+    valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
+    distij = valx + valy + valz
+    
+    return distij
+
+
+    
+
+def  WriteBondingA(MyCrystal,MySnapshot,BondTable,step,timestep,File,natom,numCells):
+#    print(MyCrystal.typat[1])
+
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    for iatom in range(natom):
+        [xCell,yCell,zCell]=Places[iatom]
+        PotentialNeighbors=[]
+        
+        l=[-1,0,1]
+        
+        for i in l:
+            for j in l:
+                for k in l:                    
+                    PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+
+        PotentialNeighbors.sort()
+        PotentialNeighbors=[i[0] for i in itertools.groupby(PotentialNeighbors)]
+
+        for jatom in PotentialNeighbors:
+            if(iatom<jatom):
+                dx = MySnapshot.atoms[jatom].xcart[0] - MySnapshot.atoms[iatom].xcart[0]
+                dy = MySnapshot.atoms[jatom].xcart[1] - MySnapshot.atoms[iatom].xcart[1]
+                dz = MySnapshot.atoms[jatom].xcart[2] - MySnapshot.atoms[iatom].xcart[2]
+                
+                valx = min(dx**2, (MyCrystal.acell[0]-dx)**2, (MyCrystal.acell[0]+dx)**2)
+                valy = min(dy**2, (MyCrystal.acell[1]-dy)**2, (MyCrystal.acell[1]+dy)**2)
+                valz = min(dz**2, (MyCrystal.acell[2]-dz)**2, (MyCrystal.acell[2]+dz)**2)
+                distij = valx + valy + valz                
+                if distij<BondTable[MyCrystal.typat[iatom]][MyCrystal.typat[jatom]]:
+                    lines[iatom].append(jatom)
+                    lines[jatom].append(iatom)
+        
+        
+            
+    
+    header = 'time '+str(step*timestep)+' fs\nstep '+str(step)+'\n'
+    File.write(header)
+    for line in lines :
+        l=''
+        for atom in line :
+                l+=str(atom)+'\t'
+        l+='\n'
+        File.write(l)
+    File.write('end\n')
+    
+ #   print("calculating neighbors real-virtual")
+    
+#    print(Neighbors)
+    
+def  WriteBondingB(MyCrystal,MySnapshot,BondTable,step,timestep,File,natom,numCells):
+#    print(MyCrystal.typat[1])
+
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    
+    
+    for iatom in range(natom):
+#        print("looking for atom",iatom)
+        if Places[iatom]!=None:
+        
+            [xCell,yCell,zCell]=Places[iatom]
+            Atoms=Mesh[xCell][yCell][zCell]
+            PotentialNeighbors=[]
+            
+            l=[-1,0,1]
+        
+            
+            for i in l:
+                for j in l:
+                    for k in l:                    
+                        PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+
+            PotentialNeighbors.sort()
+            PotentialNeighbors=[i[0] for i in itertools.groupby(PotentialNeighbors)]
+            
+            for katom in Atoms :#Looking at every atom in the cell
+                Places[katom]=None#removing each atom from the to-do list
+                for jatom in PotentialNeighbors:
+                    if(katom<jatom):
+                        dx = MySnapshot.atoms[jatom].xcart[0] - MySnapshot.atoms[katom].xcart[0]
+                        dy = MySnapshot.atoms[jatom].xcart[1] - MySnapshot.atoms[katom].xcart[1]
+                        dz = MySnapshot.atoms[jatom].xcart[2] - MySnapshot.atoms[katom].xcart[2]
+                        
+                        valx = min(dx**2, (MyCrystal.acell[0]-dx)**2, (MyCrystal.acell[0]+dx)**2)
+                        valy = min(dy**2, (MyCrystal.acell[1]-dy)**2, (MyCrystal.acell[1]+dy)**2)
+                        valz = min(dz**2, (MyCrystal.acell[2]-dz)**2, (MyCrystal.acell[2]+dz)**2)
+                        distkj = valx + valy + valz
+                        if distkj<BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]]:
+                            #print("distance = ",distkj, "on ",BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]])
+                            lines[katom].append(jatom)
+                            lines[jatom].append(katom)
+                            
+                        
+    header = 'time '+str(step*timestep)+' fs\nstep '+str(step)+'\n'
+    File.write(header)
+    for line in lines :
+        l=''
+        for atom in line :
+            l+=str(atom)+'\t'
+        l+='\n'
+        File.write(l)
+    File.write('end\n')
+    
+    
+def  WriteBondingF(MySnapshot,step,MyCrystal,BondTable,timestep,natom,numCells):
+#    print(MyCrystal.typat[1])
+    print("Step :",step )
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    
+    
+    for iatom in range(natom):
+#        print("looking for atom",iatom)
+        if Places[iatom]!=None:
+        
+            [xCell,yCell,zCell]=Places[iatom]
+            Atoms=Mesh[xCell][yCell][zCell]
+            PotentialNeighbors=[]
+            
+            l=[-1,0,1]
+        
+            
+            for i in l:
+                for j in l:
+                    for k in l:                    
+                        PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+
+            PotentialNeighbors.sort()
+            PotentialNeighbors=[i[0] for i in itertools.groupby(PotentialNeighbors)]
+            
+            for katom in Atoms :#Looking at every atom in the cell
+                Places[katom]=None#removing each atom from the to-do list
+                for jatom in PotentialNeighbors:
+                    if(katom<jatom):
+                        dx = MySnapshot.atoms[jatom].xcart[0] - MySnapshot.atoms[katom].xcart[0]
+                        dy = MySnapshot.atoms[jatom].xcart[1] - MySnapshot.atoms[katom].xcart[1]
+                        dz = MySnapshot.atoms[jatom].xcart[2] - MySnapshot.atoms[katom].xcart[2]
+                        
+                        valx = min(dx**2, (MyCrystal.acell[0]-dx)**2, (MyCrystal.acell[0]+dx)**2)
+                        valy = min(dy**2, (MyCrystal.acell[1]-dy)**2, (MyCrystal.acell[1]+dy)**2)
+                        valz = min(dz**2, (MyCrystal.acell[2]-dz)**2, (MyCrystal.acell[2]+dz)**2)
+                        distkj = valx + valy + valz
+                        if distkj<BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]]:
+                            #print("distance = ",distkj, "on ",BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]])
+                            lines[katom].append(jatom)
+                            lines[jatom].append(katom)
+                            
+    return lines
+    
+
+    
+def  WriteBondingE(MyCrystal,MySnapshot,BondTable,step,timestep,File,natom,numCells):
+#    print(MyCrystal.typat[1])
+
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    
+    
+    for iatom in range(natom):
+#        print("looking for atom",iatom)
+        if Places[iatom]!=None:
+        
+            [xCell,yCell,zCell]=Places[iatom]
+            Atoms=Mesh[xCell][yCell][zCell]
+            PotentialNeighbors=[]
+            
+            l=[-1,0,1]
+        
+            
+            for i in l:
+                for j in l:
+                    for k in l:                    
+                        PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+
+            PotentialNeighbors.sort()
+            PotentialNeighbors=[i[0] for i in itertools.groupby(PotentialNeighbors)]
+            
+            for katom in Atoms :#Looking at every atom in the cell
+                Places[katom]=None#removing each atom from the to-do list
+                Mesh[xCell][yCell][zCell]=[]
+                for jatom in PotentialNeighbors:
+                    if(katom!=jatom):
+                        dx = MySnapshot.atoms[jatom].xcart[0] - MySnapshot.atoms[katom].xcart[0]
+                        dy = MySnapshot.atoms[jatom].xcart[1] - MySnapshot.atoms[katom].xcart[1]
+                        dz = MySnapshot.atoms[jatom].xcart[2] - MySnapshot.atoms[katom].xcart[2]
+                        
+                        valx = min(dx**2, (MyCrystal.acell[0]-dx)**2, (MyCrystal.acell[0]+dx)**2)
+                        valy = min(dy**2, (MyCrystal.acell[1]-dy)**2, (MyCrystal.acell[1]+dy)**2)
+                        valz = min(dz**2, (MyCrystal.acell[2]-dz)**2, (MyCrystal.acell[2]+dz)**2)
+                        distkj = valx + valy + valz
+                        if distkj<BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]]:
+                            #print("distance = ",distkj, "on ",BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]])
+                            lines[katom].append(jatom)
+                            lines[jatom].append(katom)
+                            
+                        
+    header = 'time '+str(step*timestep)+' fs\nstep '+str(step)+'\n'
+    File.write(header)
+    for line in lines :
+        l=''
+        for atom in line :
+            l+=str(atom)+'\t'
+        l+='\n'
+        File.write(l)
+    File.write('end\n')
+    
+def  WriteBondingD(MyCrystal,MySnapshot,BondTable,step,timestep,File,natom,numCells):
+#    print(MyCrystal.typat[1])
+
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    
+    
+    for iatom in range(natom):
+#        print("looking for atom",iatom)
+        if Places[iatom]!=None:
+        
+            [xCell,yCell,zCell]=Places[iatom]
+            Atoms=Mesh[xCell][yCell][zCell]
+            PotentialNeighbors=[]
+            
+            l=[-1,0,1]
+        
+            
+            for i in l:
+                for j in l:
+                    for k in l:                    
+                        PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+
+            PotentialNeighbors.sort()
+            PotentialNeighbors=[i[0] for i in itertools.groupby(PotentialNeighbors)]
+            
+            for katom in Atoms :#Looking at every atom in the cell
+                Places[katom]=None#removing each atom from the to-do list
+                for jatom in PotentialNeighbors:
+                    if(katom<jatom): 
+                        distkj=ComputeDistance(MySnapshot.atoms[iatom].xcart, MySnapshot.atoms[katom].xcart, MyCrystal.acell)
+                        if distkj<BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]]:
+                            #print("distance = ",distkj, "on ",BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]])
+                            lines[katom].append(jatom)
+                            lines[jatom].append(katom)
+                            
+                        
+    header = 'time '+str(step*timestep)+' fs\nstep '+str(step)+'\n'
+    File.write(header)
+    for line in lines :
+        l=''
+        for atom in line :
+            l+=str(atom)+'\t'
+        l+='\n'
+        File.write(l)
+    File.write('end\n')
+    
+    
+def  WriteBondingC(MyCrystal,MySnapshot,BondTable,step,timestep,File,natom,numCells):
+#    print(MyCrystal.typat[1])
+
+    Mesh=[[[[] for _ in range(numCells)]for _ in range(numCells)] for _ in range(numCells)]
+
+    Places={}
+    
+    Lx=MyCrystal.acell[0]/numCells
+    Ly=MyCrystal.acell[1]/numCells
+    Lz=MyCrystal.acell[2]/numCells
+            
+    for iatom in range(natom):
+        x=math.fmod(MySnapshot.atoms[iatom].xcart[0],MyCrystal.acell[0])
+        y=math.fmod(MySnapshot.atoms[iatom].xcart[1],MyCrystal.acell[1])
+        z=math.fmod(MySnapshot.atoms[iatom].xcart[2],MyCrystal.acell[2])
+        xCell=int(x/Lx)
+        yCell=int(y/Ly)
+        zCell=int(z/Lz)
+                
+        Mesh[xCell][yCell][zCell].append(iatom)
+        Places[iatom]=[xCell,yCell,zCell]
+
+    lines=[[at] for at in range(natom)]
+       
+    
+    
+    for xMesh in range(numCells):
+        for yMesh in range(numCells):
+            for zMesh in range(numCells):
+                CentAtoms=list.copy(Mesh[xMesh][yMesh][zMesh])
+                PotentialNeighbors=list.copy(Mesh[xMesh][yMesh][zMesh])
+                if (xMesh+yMesh+zMesh)%2==0:
+                    l=[-1,1]
+                    PotentialNeighbors=[]
+                    for i in l:
+                        PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][yCell][zCell])
+                    for j in l: 
+                        PotentialNeighbors+=list.copy(Mesh[xCell][(yCell+j)%numCells][zCell])
+                    for k in l:                    
+                        PotentialNeighbors+=list.copy(Mesh[xCell][yCell][(zCell+k)%numCells])
+                else :
+                    l=[-1,1]
+                    for i in l:
+                        for j in l:
+                            for k in l:
+                                PotentialNeighbors+=list.copy(Mesh[(xCell+i)%numCells][(yCell+j)%numCells][(zCell+k)%numCells])
+                
+                for katom in CentAtoms:
+                    for jatom in PotentialNeighbors:
+                        distkj=ComputeDistance(MySnapshot.atoms[katom].xcart , MySnapshot.atoms[jatom].xcart, MyCrystal.acell)
+                        
+                        if distkj<BondTable[MyCrystal.typat[katom]][MyCrystal.typat[jatom]]:
+                            lines[katom].append(jatom)
+                            lines[jatom].append(katom)
+
+    
+                        
+    header = 'time '+str(step*timestep)+' fs\nstep '+str(step)+'\n'
+    File.write(header)
+    for line in lines :
+        
+        ex=line[1:]
+        ex.sort()
+        line=[line[0]]+ex
+        l=''
+        for atom in line :
+            l+=str(atom)+'\t'
+        l+='\n'
+        File.write(l)
+    File.write('end\n')
+
+
+def aux(Snapshots,steps,MyCrystal,BondTable,timestep,natom,numCells):
+    
+    lines=[]
+    for MS in range(len(Snapshots)):
+        lines.append(WriteBondingF(Snapshots[MS],steps[MS],MyCrystal,BondTable,timestep,natom,numCells))
+    
+    return lines
+        
+
+def main(argv):
+    umdp.headerumd()
+    UMDname='output.umd.dat'
+    Nsteps = 1
+    InputFile = ''
+    header = ''
+    numCells=5
+    try:
+        opts, arg = getopt.getopt(argv,"hf:s:l:i:n:v:",["fUMDfile","sSampling_Frequency","lMaxLength","iInputFile","nNumCells","version"])
+    except getopt.GetoptError:
+        print ('speciation.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -i <InputFile>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print ('computation of bonding map')
+            print ('bond.py -f <UMD_filename> -s <Sampling_Frequency> -i <InputFile> -n <numCells>, -v <version>')
+            print (' the input file contains the bond lengths for the different atom pairs.')
+            sys.exit()
+        elif opt in ("-f", "--fUMDfile"):
+            UMDname = str(arg)
+            header = header + 'FILE: -f=' + UMDname
+        elif opt in ("-s","--sNsteps"):
+            Nsteps = int(arg)
+            header = header + ' -s=' + arg
+            print('Will sample the MD trajectory every ',Nsteps,' steps')
+        elif opt in ("-i", "--iInputFile"):
+            InputFile = str(arg)
+            header = header + ' -i=' + InputFile
+            print ('Bonding cutoffs to be read from file ',InputFile)
+        elif opt in ("-n", "--nNumCells"):
+            numCells = int(arg)
+            header = header + ' -n=' + arg
+        elif opt in ("-v", "--v"):
+            v=arg
+            header = header + ' -v=' + arg
+
+    if not (os.path.isfile(UMDname)):
+        print ('the UMD files ',UMDname,' does not exist')            
+        sys.exit()
+
+    start=time.time()
+
+    MyCrystal = cr.Lattice()
+    AllSnapshots = [cr.Lattice]
+    (MyCrystal,AllSnapshots,TimeStep)=umdp.read_xcart(UMDname)       
+
+
+    
+    if len(InputFile)>0:
+        BondTable = read_inputfile(InputFile,MyCrystal)
+
+
+    M=max([max(Bondlengths) for Bondlengths in BondTable])
+
+    if MyCrystal.acell[0]/numCells<M or MyCrystal.acell[1]/numCells<M or MyCrystal.acell[2]/numCells<M:
+        print('WARNING : dimension of the cell smaller than the greatest bondlength.')
+    
+        
+
+    natom=MyCrystal.natom
+    FileAll=UMDname+'.bondingII.dat'
+    print ('Bondings will be written in ',FileAll,' file')
+    fa=open(FileAll,'w')
+    ff=open(UMDname,'r')
+    
+    for i in range(20):    
+        line=ff.readline()
+        fa.write(line)
+        
+    ff.close()
+    
+    if v=="A":
+        WriteBonding=WriteBondingA
+    if v=="B":
+        WriteBonding=WriteBondingB
+    if v=="C":
+        WriteBonding=WriteBondingC
+    if v=="D":
+        WriteBonding=WriteBondingD
+    if v=="E":
+        WriteBonding=WriteBondingE
+    if v=="F":
+        WriteBonding=WriteBondingF        
+        with concurrent.futures.ProcessPoolExecutor() as executor :
+            WriteBondingRed=partial(WriteBonding,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells)
+            Lines=list(executor.map(WriteBondingRed,AllSnapshots,[step for step in range(0,len(AllSnapshots),Nsteps)]))
+
+            #print(Lines)
+            step=0
+            for lines in Lines :                
+                header = 'time '+str(step*TimeStep)+' fs\nstep '+str(step)+'\n'
+                fa.write(header)
+                for line in lines :
+                    l=''
+                    for atom in line :
+                        l+=str(atom)+'\t'
+                    l+='\n'
+                    fa.write(l)
+                fa.write('end\n')
+                step+=1
+                
+    elif (v=="G"):
+        WriteBonding=WriteBondingF
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            WriteBondingRed=partial(WriteBonding,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells)
+            Lines=list(executor.map(WriteBondingRed,AllSnapshots,[step for step in range(0,len(AllSnapshots),Nsteps)]))
+            step=0
+            for lines in Lines :                
+                header = 'time '+str(step*TimeStep)+' fs\nstep '+str(step)+'\n'
+                fa.write(header)
+                for line in lines :
+                    l=''
+                    for atom in line :
+                        l+=str(atom)+'\t'
+                    l+='\n'
+                    fa.write(l)
+                fa.write('end\n')
+                step+=1
+    elif v=="H":
+        with concurrent.futures.ProcessPoolExecutor() as executor :
+            Aux=partial(aux,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells)
+            s=int(len(AllSnapshots)/10)
+            SnapsAlt=[AllSnapshots[i*s:(i+1)*s] for i in range(0,10)]
+            StepsAlt=[[step for step in range(i*s,(i+1)*s)] for i in range(0,10)]
+            LinesAlt=list(executor.map(Aux,SnapsAlt,StepsAlt))
+            
+            Lines=[]
+            
+            for L in LinesAlt:
+                Lines+=L
+            
+            step=0
+            for lines in Lines :                
+                header = 'time '+str(step*TimeStep)+' fs\nstep '+str(step)+'\n'
+                fa.write(header)
+                for line in lines :
+                    l=''
+                    for atom in line :
+                        l+=str(atom)+'\t'
+                    l+='\n'
+                    fa.write(l)
+                fa.write('end\n')
+                step+=1
+    
+    elif (v=="I"):
+        WriteBonding=WriteBondingF
+        
+    else :
+        for step in range(0,len(AllSnapshots),Nsteps):
+            print('step',step,'on',len(AllSnapshots))
+            WriteBonding(MyCrystal,AllSnapshots[step],BondTable,step,TimeStep,fa,natom,numCells)
+    
+    fa.close()
+    
+            
+
+    
+
+    
+    
+    
+    end=time.time()
+
+    print("runtime:",end-start)    
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
