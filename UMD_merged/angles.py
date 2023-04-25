@@ -21,7 +21,7 @@ def compute_angles(Bonds,MyCrystal,AllSnapshots,internatoms,externatoms,fa,TimeS
         SnapshotBonds=Bonds[step]
         MySnapshot=AllSnapshots[step]
         fa.write('\nstep : '+str(step)+'\ntime :'+str(step*TimeStep)+" fs \n")
-        line='Angles (deg) : '
+        line='Angles : '
         Nangles=0
         for internAt in SnapshotBonds :
             for iexternAt in SnapshotBonds[internAt]:
