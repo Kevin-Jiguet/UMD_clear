@@ -21,7 +21,7 @@ def compute_angles(Bonds,MyCrystal,AllSnapshots,internatoms,externatoms,fa,TimeS
         SnapshotBonds=Bonds[step]
         MySnapshot=AllSnapshots[step]
         fa.write('\nstep : '+str(step)+'\ntime :'+str(step*TimeStep)+" fs \n")
-        line='Angles : '
+        line='Angles (deg) : '
         Nangles=0
         for internAt in SnapshotBonds :
             for iexternAt in SnapshotBonds[internAt]:
@@ -60,7 +60,7 @@ def compute_angles(Bonds,MyCrystal,AllSnapshots,internatoms,externatoms,fa,TimeS
                         valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
                         distIEi = valx + valy + valz               
         
-                        angle=math.acos((distIEi+distIEj-distEiEj)/(2*math.sqrt(distIEi*distIEj)))
+                        angle=math.acos((distIEi+distIEj-distEiEj)/(2*math.sqrt(distIEi*distIEj)))/math.pi*180
                         
                         line+="\t"+str(angle)+" ("+str(iexternAt)+"-"+str(internAt)+"-"+str(jexternAt)+")"
                         
