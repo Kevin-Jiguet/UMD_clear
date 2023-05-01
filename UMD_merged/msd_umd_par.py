@@ -9,30 +9,26 @@ import ctypes
 from os.path import join
 
 
-current_path=os.path.abspath(__file__)#For all this to work, the file c_gofr.so must be in the same directory than gofr_umd
+current_path=os.path.abspath(__file__)#For all this to work, the file c_msd.so must be in the same directory than this script
 path_split=current_path.split('/')
 path_red=path_split[1:-1]
 path_new=''
 for u in path_red:
     path_new+='/'+u
-#c_msdbtest = 
-add_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_msd.so'))
-add_lib.compute_msd.argtypes = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double), ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
-add_lib.compute_msd.restype = None
+msd_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_msd.so'))
+msd_lib.compute_msd.argtypes = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double), ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
+msd_lib.compute_msd.restype = None
 
 
 
 def msdAtom_C(n,pos,hh,vv,ballistic):
- #    print("atom no "+str(n))
-#    if(n==0):
-#        print(pos)
     PosAr=np.array(pos)
     nitmax=(len(pos)//2-ballistic)
     msd=np.array([0.0 for _ in range(nitmax//vv)])    
     Posp = PosAr.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     MSDp = msd.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 
-    add_lib.compute_msd(Posp,MSDp,hh,vv,ballistic,nitmax)
+    msd_lib.compute_msd(Posp,MSDp,hh,vv,ballistic,nitmax)
     return msd
 
 
