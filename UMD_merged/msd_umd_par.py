@@ -121,7 +121,7 @@ def main(argv):
                         entry=line.split()
                         dicoAtoms[iatom].append([float(entry[6]),float(entry[7]),float(entry[8])])
                         
-            print ('Number of atoms of each type is ',MyCrystal.types)
+        print ('Number of atoms of each type is ',MyCrystal.types)
         
         with concurrent.futures.ProcessPoolExecutor() as executor:
             msdAtomRed=partial(msdAtom_C,hh=hh,vv=vv,ballistic=ballistic)
