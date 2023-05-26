@@ -3,7 +3,7 @@
 """
 Created on Tue May  2 14:54:47 2023
 
-@author: k
+@author: Kevin Jiguet-Covex
 """
 
 import sys,getopt,os.path
