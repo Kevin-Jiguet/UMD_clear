@@ -157,8 +157,8 @@ def main(argv):
     for opt, arg in opts:
         if opt == '-h':
             print ('computation of the bonding map')
-            print ('bond.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife>  -i <InputFile> -r <Rings>')
-            print ('  default values: -f output.umd.dat -s 1 -s 1 -l None -n 5')
+            print ('bond.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -i <InputFile> -n <NumCells>')
+            print ('  default values: -f output.umd.dat -s 1 -l None -n 5')
             print (' the input file contains the bond lengths for the different atom pairs. \n the values overwrite the option -l')
             print (' rings = 1 default, polymerization, all anions and cations bond to each other; rings = 0 only individual cation-anion groups')
             sys.exit()
