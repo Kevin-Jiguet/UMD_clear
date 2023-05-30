@@ -76,9 +76,8 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,Out
             Clusters[-1].append(atom)
 
     if Clusters ==[[]]:
-        print("ici "+str(step))
-        sys.exit()
-
+        return []
+        
     return Clusters
     
 def prep_read(BondFile):
