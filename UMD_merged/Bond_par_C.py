@@ -17,7 +17,7 @@ import numpy as np
 import ctypes
 from os.path import join
 
-current_path=os.path.abspath(__file__)#For all this to work, the file c_gofr.so must be in the same directory than gofr_umd
+current_path=os.path.abspath(__file__)#For all this to work, the file c_bonds_fullD.so must be in the same directory than gofr_umd
 path_split=current_path.split('/')
 path_red=path_split[1:-1]
 path_new=''
@@ -25,7 +25,7 @@ for u in path_red:
     path_new+='/'+u
 #c_msdbtest = 
 
-fullbond_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_bonds_full.so'))
+fullbond_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_bonds_fullD.so'))
 fullbond_lib.compute_fBonds.argtypes = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_double,ctypes.c_double,ctypes.c_double,ctypes.c_int]
 fullbond_lib.compute_fBonds.restype = ctypes.POINTER(ctypes.c_int)
 
@@ -47,9 +47,8 @@ def read_inputfile(InputFile,MyCrystal):
 
 def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numCells,acell):
     
-    print(step)
-#    print(MySnapshotL[:10])
-    MSp = np.array(MySnapshotL).ctypes.data_as(ctypes.POINTER(ctypes.c_double))    
+    print("calculating bonds in snapshot n. "+str(step))
+    MSp = np.array(list(MySnapshotL)).ctypes.data_as(ctypes.POINTER(ctypes.c_double))    
     BTp = np.array(BondTable).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     CrystalTypes = []
     for ty in range(MyCrystal.ntypat):
@@ -58,25 +57,21 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
     CTp = (ctypes.c_int * natom)(*CrystalTypes)
 
     Bonds = fullbond_lib.compute_fBonds(MSp,BTp,CTp,natom,MyCrystal.ntypat,acell[0],acell[1],acell[2],numCells)
-    M = Bonds[0]
+    LBonds = Bonds[0]
 
-    index = 1
-    
     BondsList=[[at] for at in range(natom)]
     atom=0
-    
-    while index<1+M*27*natom : 
-        if Bonds[index]!=-1:
-            BondsList[Bonds[index]].append(atom)
-            index+=1
+    for i in range(1,LBonds):
+        if Bonds[i]!=-1:
+            BondsList[Bonds[i]].append(atom)
         else : 
             atom+=1
-            index = M*27*atom+1
+                
     
     return BondsList
 
 
-def read_xcart_only(umdfile):
+def read_xcart_only(umdfile,Nsteps):
     niter = 0
     MyCrystal = cr.Lattice()
     AllSnapshotsList = []
@@ -122,18 +117,23 @@ def read_xcart_only(umdfile):
 
                 if entry[0] == 'atoms:':
                     print('reading file : current iteration no.',niter)
-                    if niter==5000:
-                        break
                     MySnapshot = np.zeros((MyCrystal.natom,3),dtype=float)
-                    for iatom in range(MyCrystal.natom):
-                        line = ff.readline()
-                        line=line.strip()
-                        entry=line.split()
-                        coord=np.array([0.0,0.0,0.0])
-                        for jj in range(3):
-                            coord[jj]=float(entry[jj+3])
-                        MySnapshot[iatom]=coord
-                    AllSnapshotsList.append(MySnapshot)
+                    
+                    if int(niter/Nsteps)*Nsteps==niter:
+                        for iatom in range(MyCrystal.natom):
+                            line = ff.readline()
+                            line=line.strip()
+                            entry=line.split()
+                            coord=np.array([0.0,0.0,0.0])
+                            for jj in range(3):
+                                coord[jj]=math.fmod(float(entry[jj+3]),acell[jj])
+                            MySnapshot[iatom]=coord
+                        AllSnapshotsList.append(MySnapshot)
+                    
+                    else :
+                        for iatom in range(MyCrystal.natom):
+                            line = ff.readline()
+                            
                     niter += 1
     #!!! remove first element from AllSnapshots
     print('len of allsnapshots is',len(AllSnapshotsList))
@@ -192,7 +192,7 @@ def main(argv):
 
         
 
-    (MyCrystal,AllSnapshotsL,acell,TimeStep)=read_xcart_only(UMDname)
+    (MyCrystal,AllSnapshotsL,acell,TimeStep)=read_xcart_only(UMDname,Nsteps)
     if maxlength==None and len(InputFile)>0 :
         BondTable = read_inputfile(InputFile,MyCrystal)
     elif maxlength!=None :
@@ -209,7 +209,7 @@ def main(argv):
 
     natom=MyCrystal.natom
     FileAll=UMDname[:-8]+'.bondingfile.dat'
-    print ('Bondings will be written in <',FileAll,'> file')
+    print ('Bonds will be written in <',FileAll,'> file')
     fa=open(FileAll,'w')
     ff=open(UMDname,'r')
     
@@ -222,9 +222,10 @@ def main(argv):
     WriteBondingRed=partial(WriteBonding_C_full,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells,acell=acell)
         
     with concurrent.futures.ProcessPoolExecutor() as executor :
-        Lines=list(executor.map(WriteBondingRed,AllSnapshotsL,[step for step in range(0,len(AllSnapshotsL),Nsteps)]))
+        Lines=list(executor.map(WriteBondingRed,AllSnapshotsL,[step*Nsteps for step in range(len(AllSnapshotsL))]))
 
     step=0
+    print("Writing...")
     for lines in Lines :                
         header = 'time '+str(step*TimeStep)+' fs\nstep '+str(step)+'\n'
         fa.write(header)
@@ -239,6 +240,10 @@ def main(argv):
         step+=1
                             
     fa.close()
+    
+    
+    print ('Bonds written in <',FileAll,'> file')
+
     
     end=time.time()
 
