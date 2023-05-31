@@ -9,7 +9,7 @@ int min(int a,int b){
 
 }	
 
-int atom_to_indexB(int atom,int CentMin,int CentMax,int OutMin,int OutMax){
+int atom_to_indexB(int atom,int CentMin,int CentMax,int OutMin,int OutMax){//Gives, in the BondIndexes tab, the index of the data pertaining to the atom.
 
 	int place;
 	if(CentMax<=OutMax){
@@ -30,7 +30,7 @@ int atom_to_indexB(int atom,int CentMin,int CentMax,int OutMin,int OutMax){
 	}
 }
 
-int atom_to_indexAt(int atom,int CentMin,int CentMax,int OutMin,int OutMax){
+int atom_to_indexAt(int atom,int CentMin,int CentMax,int OutMin,int OutMax){//Gives, in the AllAtoms tab, the index of the atom.
 
 	int indice;
 	if(atom<=CentMax && atom>=CentMin){	
@@ -43,7 +43,7 @@ int atom_to_indexAt(int atom,int CentMin,int CentMax,int OutMin,int OutMax){
 	return indice;
 }
 
-void reinit(int *AllAts,int CentMin, int CentMax,int OutMin,int OutMax){
+void reinit(int *AllAts,int CentMin, int CentMax,int OutMin,int OutMax){//Reinitializes (refills) the AllAts list with all the atoms.
 
 	if(CentMax!=OutMax){
 		for(int i=0 ; i<(CentMax-CentMin+1) ; i++){
@@ -61,7 +61,7 @@ void reinit(int *AllAts,int CentMin, int CentMax,int OutMin,int OutMax){
 }
 
 
-void clusteringall(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int atom){
+void clusteringall(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int atom){//fills the neighbors tab with the atoms of each cluster. Polymerization.
 
 	int indiceAt, at, indiceCoord;
 	indiceAt = atom_to_indexB(atom,CentMin,CentMax,OutMin,OutMax);
@@ -79,7 +79,7 @@ void clusteringall(int *neighbors,const int *SnapshotBonds, const int *indBonds,
 	}
 }
 
-void clusteringrec(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int atom, const int r){
+void clusteringrec(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int atom, const int r){//fills the neighbors tab with the atoms of each cluster. Coordination.
 
 	if(r>0){
 
@@ -101,7 +101,7 @@ void clusteringrec(int *neighbors,const int *SnapshotBonds, const int *indBonds,
 	}
 }
 
-int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int M, const int r){
+int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int M, const int r){//returns the tab Neighbors, containing all the clusters, each separated by the value "-1".
 	
 	int *AllAts;
 	int *neighbors;
@@ -123,6 +123,8 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 		len = 2*nAts+1;					
 	}
 
+//Memory allocation
+	
 	neighbors = calloc(len,sizeof(int));
 	AllAts = calloc(nAts,sizeof(int));		
 
@@ -138,7 +140,7 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 //Neighbors computation
 	neighbors[0]=1;
 
-	if(r>0){
+	if(r>0){//Coordination
 		while(index<CentMax-CentMin+1){
 			if(AllAts[index] != -1){
 				atom=AllAts[index];
@@ -149,10 +151,10 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 			}		
 			neighbors[0]++;
 			index++;
-			reinit(AllAts,CentMin,CentMax,OutMin,OutMax);	
+			reinit(AllAts,CentMin,CentMax,OutMin,OutMax);//Reinitialization because the same coordinating atom can be in different clusters
 		}
 	}
-	else{
+	else{//Polymerization
 		while(index<nAts){
 			if(AllAts[index] != -1){
 				atom=AllAts[index];
@@ -163,7 +165,7 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 				neighbors[0]++;
 			}					
 			index++;		
-		}
+		}//No reinitialization because the same atom cannot be in two different polymers
 		while(neighbors[neighbors[0]]==-1){
 			neighbors[0]--;
 		}
@@ -174,11 +176,11 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 		return neighbors;
 	}
 	
-	Neighbors = calloc(neighbors[0]+1,sizeof(int));
+	Neighbors = calloc(neighbors[0]+1,sizeof(int));//More condensed data
 		
 	int ind=1;
 	len=0;
-
+//Putting only the relevant data in the Neighbors tab
 	for(int i=1 ; i<(neighbors[0]+1) ; i++){
 		if(neighbors[i]==-1){
 			if(len<=1){
@@ -210,6 +212,5 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int Cen
 	free(AllAts);
 
 	return Neighbors;
-
 }
 	
