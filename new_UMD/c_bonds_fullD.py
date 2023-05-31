@@ -25,8 +25,7 @@ int maxval(const int tab[], int L){
 return val;
 }
 
-int* compute_fBonds(const double *MySnapshot, const double *BondTable, const int *CrystalTypes, const int nAtoms, const int ntypat, const double acell0, const double acell1, const double acell2, const int nCells){
-
+int* compute_fBonds(const double *MySnapshot, const double *BondTable, const int *CrystalTypes, const int nAtoms, const int ntypat, const double acell0, const double acell1, const double acell2, const int nCells){//returns the Bonds tab, containing the bound atoms. Two successive atoms are bound to the same central atom. The value "-1" is used to separate each central atom from the next one.
 
     int* DicoAtoms;
     int* nMesh;
@@ -50,15 +49,13 @@ int* compute_fBonds(const double *MySnapshot, const double *BondTable, const int
     double dx,dy,dz,valx,valy,valz,distij;
 
 
-
+//Allocating memory
     DicoAtoms = calloc((3*nAtoms+1),sizeof(int));
-//    MySnapshot = malloc((3*nAtoms)*sizeof(double));
     nMesh = calloc((nCells*nCells*nCells),sizeof(int));
     MeshIndex = calloc((nCells*nCells*nCells),sizeof(int));
     nBonding = calloc(nAtoms , sizeof(long int));
-  //  CrystalTypes = malloc(nAtoms * sizeof(int));
 
-    for (int i=0 ; i<nAtoms ; i=i+1){
+    for (int i=0 ; i<nAtoms ; i=i+1){//Determining to which specific sub-cell each atom belongs
 
         x = MySnapshot[3*i];
         y = MySnapshot[3*i+1];
@@ -77,21 +74,21 @@ int* compute_fBonds(const double *MySnapshot, const double *BondTable, const int
     }
 
 
-    int M = maxval(nMesh,nCells*nCells*nCells);//maximum number of atoms in any cell
+    int M = maxval(nMesh,nCells*nCells*nCells);//maximum number of atoms in any cell ; used to determine the size of the tabs
 
+//Allocating memory
     Mesh = calloc((nCells*nCells*nCells*M),sizeof(int));
     Bonding = calloc((nAtoms*M*27+1),sizeof(int));
-    int Ats[M];//table containing the atoms in a central cell
-    int Coord[M*27];//table containing the coordinating atoms in the 27 surrounding cells
-    Bonding[0]=M;
+    if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
 
+    int Ats[M];//table which will contain the atoms in a central cell
+    int Coord[M*27];//table which will contain the coordinating atoms in the 27 (3^3) surrounding cells
+    
+    Bonding[0]=M;
 
     for(int i = 1; i<nAtoms*M*27+1 ; i++){
 	Bonding[i]=-1;
     }
-if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
-
-
 
     for(int iat = 0 ; iat<nAtoms ; iat++){
 
@@ -102,12 +99,12 @@ if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
 
         cellnum = nX*nCells*nCells+nY*nCells+nZ;
         index = MeshIndex[cellnum];
-	if(cellnum>-1 && cellnum<nCells*nCells*nCells){Mesh[M*cellnum+index] = iat;}else{nBonding[nAtoms-1]=iat; nBonding[0]=nCells*nCells*nCells; nBonding[0]=cellnum ; nBonding[1]=nX; nBonding[2]=nY; nBonding[3]=nZ; return nBonding;}
+	if(cellnum>-1 && cellnum<nCells*nCells*nCells){Mesh[M*cellnum+index] = iat;}
 
-        Mesh[M*cellnum+index] = iat;
+	Mesh[M*cellnum+index] = iat;
 	MeshIndex[cellnum]++;
     }
-
+//Filling the Bonding tab
     for(int iat=0 ; iat<nAtoms ; iat++) {
 
         numCoord = 0;
@@ -123,9 +120,9 @@ if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
 	    for(int iatom=0 ; iatom<index ; iatom++){
                
 	        Ats[iatom]=Mesh[M*cellnum+iatom];
-		DicoAtoms[3*Ats[iatom]]=-1;
+		DicoAtoms[3*Ats[iatom]]=-1;//Marking that we will have already calculated the bonds for this specific atom
             }
-
+//Filling the Coord tab
             for(int i=-1 ; i<2 ; i++){
                     cx = (nX+i+nCells)%nCells;
                     for(int j=-1 ; j<2 ; j++){
@@ -153,7 +150,7 @@ if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
 
                         ne = Coord[jatom];
 
-                        if(at<ne){
+                        if(at<ne){//Determining whether at and ne are bound together
 
                             dx = MySnapshot[at*3]-MySnapshot[ne*3];
                             dy = MySnapshot[at*3+1]-MySnapshot[ne*3+1];
@@ -163,7 +160,7 @@ if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
                             valz = min(pow(dz,2),pow(dz-acell1,2),pow(dz+acell2,2));
                             distij = valx+valy+valz;
 
-                            if(distij<BondTable[CrystalTypes[at]*ntypat+CrystalTypes[ne]]){
+                            if(distij<BondTable[CrystalTypes[at]*ntypat+CrystalTypes[ne]]){//If they are, we fill the Bonding tab with the appropriate values
                                 Bonding[1+at*M*27+nBonding[at]]=ne;
                                 Bonding[1+ne*M*27+nBonding[ne]]=at;
 				ntotAts = ntotAts+2;
@@ -178,7 +175,7 @@ if(Mesh==NULL){fprintf(stderr,"Mem alloc failure");exit(1);}
             }
 
 
-	int* Bonds;
+	int* Bonds;//Will contain the data of Bonding in a more condensed form
 	
 	Bonds = calloc(ntotAts+nAtoms+2,sizeof(int));
 	Bonds[0]=1;
