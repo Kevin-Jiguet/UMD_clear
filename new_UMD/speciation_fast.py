@@ -175,8 +175,9 @@ def main(argv):
             print ('speciation.py program to compute bonding maps and identify speciation')
             print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
             print ('  default values: -f bonding.umd.dat -s 1 -m 0 -r 1 -n 4')
-            print (' the bond file contains the bonds relations for each snapshot.')
-            print (' rings = 1 default, polymerization, all anions and cations bond to each other; rings = 0 only individual cation-anion groups')
+            print (' the bond file contains the bonds relations for each snapshot. Computed with Bond_par_C.py.')
+            print (' rings = 1 default, all anions bind to cations ; rings = 0, polymerization, all anions bind to cations AND anions ; rings = x>0, all anions bind to cations then to other anions to form a xth-coordination polyhedra')
+            print (' -m : minimal duration of existence for a chemical species to be taken into account (fs)')
             sys.exit()
         elif opt in ("-f", "--fBondFile"):
             BondFile = str(arg)
@@ -205,6 +206,8 @@ def main(argv):
                 print ('Calculation of order '+str(arg)+" polymerized coordination")
             else :
                 print ('Undefined calculation')
+                print ('-r should be a positive integer')
+                sys.exit()
 
     header = header + ' -r=' + str(rings)
 
@@ -217,12 +220,6 @@ def main(argv):
     for ii in range(len(Anions)):
         if Anions[ii] not in ClusterAtoms:
             ClusterAtoms.append(Anions[ii])
-    if rings == 1:
-        print('searching for cations',Cations)
-        print('surrounded by anions ',Anions)
-    else:
-        print('all atoms bonding:',ClusterAtoms)
-        
                   
     (MyCrystal,OctIndexes,TimeStep)=prep_read(BondFile)    
 
@@ -240,6 +237,7 @@ def main(argv):
         for jatom in range(len(Anions)):
             if MyCrystal.elements[MyCrystal.typat[iatom]]==Anions[jatom]:
                 outeratoms.append(iatom)           #contains the list with the index of the coordinating atoms from the 0 ... natom
+
     print('All ligands are: ',ligands)
     print('Central atoms are :',centralatoms)
     print('Coordinating atoms are :',outeratoms)
@@ -254,42 +252,43 @@ def main(argv):
     
 
     with concurrent.futures.ProcessPoolExecutor() as executor :
-        Data = list(executor.map(readRed,OctIndexes[:-1],OctIndexes[1:],[step for step in range(len(OctIndexes)-1)]))
+        Data = list(executor.map(readRed,OctIndexes[:-1],OctIndexes[1:],[step for step in range(len(OctIndexes)-1)])) #Converting bond file into python list
     Bonds = [Data[i][0] for i in range(len(Data))]
-    BondsIndexes = [Data[i][1] for i in range(len(Data))]
-
-        
-    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
-    print ('Population will be written in ',FileAll,' file')
-    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.stat.dat'
-    print ('Statistics will be written in ',FileStat,' file')
-    header+="\n"
- 
+    BondsIndexes = [Data[i][1] for i in range(len(Data))]#BondIndexes[i] indicates how many atoms are listed in Bonds before the ones bound to the atom n° i. 
     
     clusteringRed=partial(clustering, CentMin=centralatoms[0],CentMax=centralatoms[-1],OutMin=outeratoms[0],OutMax=outeratoms[-1],r=rings)
        
     with concurrent.futures.ProcessPoolExecutor() as executor :
-        clusters=list(executor.map(clusteringRed,Bonds,BondsIndexes, [step for step in range(len(Bonds))]))
+        clusters=list(executor.map(clusteringRed,Bonds,BondsIndexes, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
     
     
-    with concurrent.futures.ProcessPoolExecutor() as executor :
+    with concurrent.futures.ProcessPoolExecutor() as executor :#divides the succession of snapshots in chunks then establish the life duration of each cluster of atoms within these chunks
         L=len(clusters)
         Clusters=[clusters[i*int(L/nChunks):(i+1)*int(L/nChunks)] for i in range(nChunks)]
         populations=list(executor.map(analysis_subtab,Clusters,[Step*int(L/nChunks) for Step in range(nChunks)]))
-    
-    
+
+        
+    #Fuses the chunks together and updates the life duration of each cluster
     population=populations[0]
-    for pop in populations[1:]:
+    for pop in populations[1:]: #for each chunk
         for key in pop:
-            if key in population.keys():
-                if population[key][-1][-1]==pop[key][0][0]-1:
+            if key in population.keys():#if the cluster has been previously seen
+                if population[key][-1][-1]==pop[key][0][0]-1:#if the cluster was alive at the end of the previous chung and at the beginning of this one
                     population[key][-1]+=pop[key][0]
                     population[key]+=pop[key][1:]
                 else :
-                    population[key]+=pop[key]
+                    population[key]+=pop[key] 
             else : 
                 population[key]=pop[key]
-                    
+
+                
+        #Creating the output files        
+    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
+    print ('Population will be written in ',FileAll,' file')
+    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.stat.dat'
+    print ('Statistics will be written in ',FileStat,' file')
+    header+="\n"            
+                
     print("Writing...")
     dicoNames={}
     dicoTimes={}
