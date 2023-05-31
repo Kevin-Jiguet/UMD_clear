@@ -5,7 +5,7 @@ Created on Tue May 30 09:44:43 2023
 """
 #!/usr/bin/env python3
 ###
-##AUTHORS: RAZVAN CARACAS, KEVIN JIGUET
+##AUTHORS: KEVIN JIGUET
 ###
 
 
@@ -35,13 +35,9 @@ bond_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_define_bonds.so'))
 bond_lib.defineBonds.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
 bond_lib.defineBonds.restype = ctypes.POINTER(ctypes.c_int)
 
-
-
-
-def analysis_subtab(Clusters,Step):
+def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the individual clusters, and the values are a list of list of their *consecutive* steps of existence. 
         population_parallel={}
         for Snapshot in Clusters :
-        #    print("analysis of snapshot no "+str(Step))
             for cluster in Snapshot :
                 if str(cluster) in population_parallel.keys():
                     if population_parallel[str(cluster)][-1][-1]==Step-1:
@@ -57,16 +53,17 @@ def analysis_subtab(Clusters,Step):
 def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,OutMax,r):
     
     print("calculating species from snapshot n. "+str(step))
-    M=SnapshotBondIndexes[-1]
-    
-        
+    M=SnapshotBondIndexes[-1]#maximum number of bound atoms for any atoms
+    #Preparing data for the C script        
     SBp = (ctypes.c_int * len(SnapshotBonds))(*SnapshotBonds)
     BIp = (ctypes.c_int * (len(SnapshotBondIndexes)-1))(*SnapshotBondIndexes[:-1])
-    Np = clust_lib.fullclustering(SBp,BIp,CentMin,CentMax,OutMin,OutMax,M,r)
+
+    Np = clust_lib.fullclustering(SBp,BIp,CentMin,CentMax,OutMin,OutMax,M,r)#Actually computes the clusters
+    
     Clusters = [[]]
-
     length = Np[0]
-
+    
+    #Converting C data into a python list of clusters
     for i in range(1,length):
         atom=Np[i]
         if atom ==-1 :
@@ -80,7 +77,7 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,Out
         
     return Clusters
     
-def prep_read(BondFile):
+def prep_read(BondFile):#Returns the indexes of octets pertaining to each snapshot in the bonding file ; builds the Crystal
     MyCrystal = cr.Lattice()
     ff=open(BondFile,"r")
     for _ in range(20):
@@ -132,24 +129,26 @@ def prep_read(BondFile):
     ff.close()
     return MyCrystal, OctIndexes, TimeStep
 
-def read_snapshotbonds_C(octettop,octetbot,step,CentMin,CentMax,OutMin,OutMax,File):
-    print("extracting bonds from snapshot n. "+str(step))
+def read_snapshotbonds_C(octettop,octetbot,step,CentMin,CentMax,OutMin,OutMax,File):#Converts the bonding information of a given snapshot into a list of atoms 
+    print("extracting bonds from snapshot n. "+str(step))                           #the data is contained between the octets "octettop" and "octetbot" in the bonding file
+    
     ff=open(File,"r")
     ff.seek(octettop,0)
     snapshot=ff.read(octetbot-octettop)
     ff.close()
+
     snapPointer = ctypes.c_char_p(snapshot.encode('utf-8'))
     
     BList = bond_lib.defineBonds(snapPointer,len(snapshot),CentMin,CentMax,OutMin,OutMax)
     
     SnapshotBondingTable = []
     SnapshotBondIndexes = []
-        
+   
+    #Converts the C data into two python lists
     for i in range(2,BList[0]+1):
-        SnapshotBondingTable.append(BList[i])
+        SnapshotBondingTable.append(BList[i])#This one contains the atoms
     for i in range(BList[0]+2,BList[0]+BList[1]+2):
-        SnapshotBondIndexes.append(BList[i])
-
+        SnapshotBondIndexes.append(BList[i])#This one contains the information about which is bound to which in the other list
         
     return SnapshotBondingTable,SnapshotBondIndexes
 
@@ -229,11 +228,11 @@ def main(argv):
     for iatom in range(MyCrystal.natom):
         for jatom in range(len(ClusterAtoms)):
             if MyCrystal.elements[MyCrystal.typat[iatom]]==ClusterAtoms[jatom]:
-                ligands.append(iatom)           #contains the list with the index of the ligand atoms from the 0 ... natom
+                ligands.append(iatom)              #contains the list with the index of the ligand atoms from the 0 ... natom
     for iatom in range(MyCrystal.natom):
         for jatom in range(len(Cations)):
             if MyCrystal.elements[MyCrystal.typat[iatom]]==Cations[jatom]:
-                centralatoms.append(iatom)           #contains the list with the index of the central atoms from the 0 ... natom
+                centralatoms.append(iatom)         #contains the list with the index of the central atoms from the 0 ... natom
         for jatom in range(len(Anions)):
             if MyCrystal.elements[MyCrystal.typat[iatom]]==Anions[jatom]:
                 outeratoms.append(iatom)           #contains the list with the index of the coordinating atoms from the 0 ... natom
@@ -242,10 +241,10 @@ def main(argv):
     print('Central atoms are :',centralatoms)
     print('Coordinating atoms are :',outeratoms)
     
-    if centralatoms ==[]:
+    if centralatoms == []:
         print("ERROR : element ",Cations," not present in simulation")
         sys.exit()
-    if outeratoms ==[]:
+    if outeratoms == []:
         print("ERROR : element ",Anions," not present in simulation")
         
     readRed=partial(read_snapshotbonds_C,CentMin=centralatoms[0],CentMax=centralatoms[-1],OutMin=outeratoms[0],OutMax=outeratoms[-1],File=BondFile)
@@ -253,8 +252,9 @@ def main(argv):
 
     with concurrent.futures.ProcessPoolExecutor() as executor :
         Data = list(executor.map(readRed,OctIndexes[:-1],OctIndexes[1:],[step for step in range(len(OctIndexes)-1)])) #Converting bond file into python list
+
     Bonds = [Data[i][0] for i in range(len(Data))]
-    BondsIndexes = [Data[i][1] for i in range(len(Data))]#BondIndexes[i] indicates how many atoms are listed in Bonds before the ones bound to the atom n° i. 
+    BondsIndexes = [Data[i][1] for i in range(len(Data))]#BondIndexes[x][i] indicates how many atoms, for the snapshot n° x, are listed in Bonds before the ones bound to the atom n° i. 
     
     clusteringRed=partial(clustering, CentMin=centralatoms[0],CentMax=centralatoms[-1],OutMin=outeratoms[0],OutMax=outeratoms[-1],r=rings)
        
@@ -265,10 +265,12 @@ def main(argv):
     with concurrent.futures.ProcessPoolExecutor() as executor :#divides the succession of snapshots in chunks then establish the life duration of each cluster of atoms within these chunks
         L=len(clusters)
         Clusters=[clusters[i*int(L/nChunks):(i+1)*int(L/nChunks)] for i in range(nChunks)]
+        if int(L/nChunks)!=L/nChunks:
+            Clusters+=[clusters[(nChunks)*int(L/nChunks):]]
         populations=list(executor.map(analysis_subtab,Clusters,[Step*int(L/nChunks) for Step in range(nChunks)]))
 
         
-    #Fuses the chunks together and updates the life duration of each cluster
+    #Fuses the chunks together and updates the life duration information of each cluster
     population=populations[0]
     for pop in populations[1:]: #for each chunk
         for key in pop:
