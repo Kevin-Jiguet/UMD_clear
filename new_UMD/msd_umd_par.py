@@ -42,7 +42,7 @@ def main(argv):
     start=time.time()
     umdfile=''
     try:
-        opts, arg = getopt.getopt(argv,"hf:z:v:b:a:",["fumdfile","zHorizontalJump","vVerticalJump","bBallistic","aAtoms"])
+        opts, arg = getopt.getopt(argv,"hf:z:v:b:x:",["fumdfile","zHorizontalJump","vVerticalJump","bBallistic","xAtoms"])
     except getopt.GetoptError:
         print ('msd_umd.py -f <XYZ_filename> -z <HorizontalJump> -v <VerticalJump> -b <Ballistic> -a <Atoms>')
         sys.exit(2)
@@ -56,6 +56,7 @@ def main(argv):
             print ('HorizontalJump = discretization for the start of the sampling window.')
             print ('VerticalJump = discretization for the length of the sampling window.')
             print ('Ballistic = estimation of the ballistic part of the trajectory. Default is 0. Typical values of 100 are sufficient.')
+            print ('Atoms = atoms or elements ; parameter to either print the msd of each individual atom (+ the mean msd of each element) or only the msd of the elements.')
             sys.exit()
         elif opt in ("-f", "--fumdfile"):
             umdfile = str(arg)
@@ -72,7 +73,7 @@ def main(argv):
                 sys.exit()
         elif opt in ("-b", "--bBallistic"):
             ballistic = int(arg)
-        elif opt in ("-a","--aAtoms"):
+        elif opt in ("-x","--xAtoms"):
             a=str(arg)
             
     if (os.path.isfile(umdfile)):
@@ -130,12 +131,12 @@ def main(argv):
                
             msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[dicoAtoms[iatom] for iatom in range(MyCrystal.natom)]))
                 
-            if(a=="species"):
+            if(x=="elements"):
                 
                 MSD=np.array([[0.0 for _ in range(len(msdArray[0]))] for _ in range(MyCrystal.ntypat)])
                 for iatom in range(len(msdArray)) :
                     MSD[MyCrystal.typat[iatom]]+=msdArray[iatom]
-                msdfile+='.species.dat'
+                msdfile+='.elements.dat'
                 f = open(msdfile,'w')
                 string='time_(fs)\t'
                 for itypat in range(MyCrystal.ntypat):
@@ -155,7 +156,7 @@ def main(argv):
                     f.write(string)
                 print ('MSDs printed in file ',msdfile)
    
-            elif(a=="atoms"):
+            elif(x=="atoms"):
                 
                 msdfile+='.atoms.dat'
                 f = open(msdfile,'w')
