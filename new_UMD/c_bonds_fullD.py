@@ -1,5 +1,5 @@
 /*
- * Author: Kevin Jiguet-Covec
+ * Author: Kevin Jiguet-Covex
  * Date:   May 31, 2023
  */ 
 
