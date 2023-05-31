@@ -162,7 +162,7 @@ def main(argv):
     minlife = 5
     rings = 1
     header = ''
-    nChunks=4
+    nChunks=8
     start=time.time()
     try:
         opts, arg = getopt.getopt(argv,"hf:s:c:a:m:r:n:",["fBondFile","sSampling_Frequency", "cCations","aAnions","mMinlife","rRings","nnChunks"])
@@ -175,8 +175,9 @@ def main(argv):
             print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
             print ('  default values: -f bonding.umd.dat -s 1 -m 0 -r 1 -n 4')
             print (' the bond file contains the bonds relations for each snapshot. Computed with Bond_par_C.py.')
-            print (' rings = 1 default, all anions bind to cations ; rings = 0, polymerization, all anions bind to cations AND anions ; rings = x>0, all anions bind to cations then to other anions to form a xth-coordination polyhedra')
-            print (' -m : minimal duration of existence for a chemical species to be taken into account (fs)')
+            print (' -r : rings = 1 default, all anions bind to cations ; rings = 0, polymerization, all anions bind to cations AND anions ; rings = x>0, all anions bind to cations then to other anions to form a xth-coordination polyhedra')
+            print (' -m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
+            print (' -n : number of chunks for the praallelization of the clusters data ; default 8')
             sys.exit()
         elif opt in ("-f", "--fBondFile"):
             BondFile = str(arg)
