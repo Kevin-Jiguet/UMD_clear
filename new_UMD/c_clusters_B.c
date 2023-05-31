@@ -1,3 +1,8 @@
+/*
+ * Author: Kevin Jiguet-Covex
+ * Date:   May 31, 2023
+ */ 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
