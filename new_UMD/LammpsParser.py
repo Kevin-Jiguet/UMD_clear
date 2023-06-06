@@ -126,7 +126,7 @@ def main(argv):
     string=""
     for x in typat :
         string+=" "+str(x)
-    string+="\n\n\n"
+    string+="\n\n"
     fa.write("typat "+string)
 
 
