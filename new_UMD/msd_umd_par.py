@@ -1,3 +1,7 @@
+
+### Author : Kevin Jiguet-Covex
+
+
 import sys,getopt,os.path
 import crystallography as cr
 import umd_process as umdp
