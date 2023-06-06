@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 int min(int a,int b){
 
@@ -14,7 +16,186 @@ int min(int a,int b){
 
 }	
 
-int atom_to_indexB(int atom,int CentMin,int CentMax,int OutMin,int OutMax){//Gives, in the BondIndexes tab, the index of the data pertaining to the atom.
+double min3(double a, double b, double c){
+
+	double minimum = a;
+
+	if(minimum>b){minimum=b;}
+	if(minimum>c){minimum=c;}
+
+	return minimum;
+
+}
+
+
+double* read_coord(char *MySnapshot, int nAtoms, int len){//reads the xcart coordinates of a snapshot and returns it in a tab
+
+	int depth = 0;
+	int atom = 0;
+	int flagxcart = 0;
+	double number = 0;
+	double* Coordinates;
+	int lineIndex=0;//index on the line of the number we are looking at
+	Coordinates = calloc(3*nAtoms,sizeof(double));
+	for(int i=0 ; i<len ; i++){
+
+		if(MySnapshot[i]==' '){	
+			if(flagxcart){
+				Coordinates[3*atom+lineIndex-3]=number;
+				flagxcart=0;
+			}
+			number=0;
+			lineIndex++;
+			depth=0;//The next digits will be in the integer part
+		}
+
+		else if(lineIndex==3||lineIndex==4||lineIndex==5){//If we are on the xcart coordinates
+			flagxcart = 1;
+			if(isdigit(MySnapshot[i])){
+				if(depth == 0){
+					number=number*10;
+					number=number+(MySnapshot[i]-'0');
+				}
+			
+				else{
+					number=number+(double)(MySnapshot[i]-'0')/depth;
+					depth=depth*10;
+
+				}
+			}
+			else if(MySnapshot[i]=='.'){
+				depth=10;//We're in the decimal part now
+			}
+			
+
+		}
+		else if(MySnapshot[i]=='\n'){
+			atom++;//Next line, next atom ; we reinitialize the variables
+			lineIndex=0;
+			depth=0;
+			number=0;
+		}
+	}
+return Coordinates;
+}
+
+//Calculates the angles within the polyhedras if it contains at least 2 coordinated atoms
+double* angles(const int *polyhedras, int nPol, int M, const double *MySnapshot, int CentMin, int CentMax, int OutMin, int OutMax, double acell0, double acell1, double acell2){
+	
+	double* AnglesList;
+	int* OutList;
+	double* CoordList;
+	int at,ne1,ne2;	
+	double xCent,yCent,zCent;
+	double Deltx1,Delty1,Deltz1,Deltx2,Delty2,Deltz2,valx1,valy1,valz1,valx2,valy2,valz2,deltzz,deltxx,deltyy,valxx,valyy,valzz,dist1,dist2,distij,angle;
+	double x1,y1,z1,x2,y2,z2;
+	int centat=1;
+	int nbounds=0 ;
+	int ncent=0;
+	int index=0;
+	int flagcoord=0;
+
+	CoordList = calloc(3*M,sizeof(double));
+	OutList = calloc(M,sizeof(int));
+	AnglesList = calloc((OutMax-OutMin+1)*(OutMax-OutMin)/2+1+CentMax-CentMin+1,sizeof(double));
+	AnglesList[0]=1;
+
+
+
+	while(ncent<nPol){
+		
+		index++;
+		at = polyhedras[index];
+		
+		
+		if(at==-1){
+			centat = 1;//means that the next atom on the polyhedras list will be a central atom
+			nbounds = 0;
+			ncent++;
+			AnglesList[(int)AnglesList[0]]=-1;//separation between clusters
+			AnglesList[0]++;
+
+		}		
+		
+		else if(centat==1){//we define the coordinates of the central atom
+			centat = 0;//The next atom on the polyhedras list will be an adjacent atom
+			xCent = MySnapshot[3*at];
+			yCent = MySnapshot[3*at+1];
+			zCent = MySnapshot[3*at+2];
+		}
+
+		else {
+			flagcoord=1;
+			while(flagcoord){//while we are looking at the same cluster
+				at = polyhedras[index];
+				if(at!=-1){
+					CoordList[3*nbounds]=MySnapshot[3*at];//We fill the CoordList with the coordinates of outer atoms
+					CoordList[3*nbounds+1]=MySnapshot[3*at+1];
+					CoordList[3*nbounds+2]=MySnapshot[3*at+2];
+					nbounds++;
+					index++;
+				}
+				else{
+					flagcoord=0;//Means that we're out of the cluster now
+					index--;
+				}
+			}
+			for(int i=0 ; i<nbounds ; i++){//We browse the CoordList to compute the angle for each pair of outer (adjacent) atoms
+
+				x1 = CoordList[3*i];
+				y1 = CoordList[3*i+1];
+				z1 = CoordList[3*i+2];
+								
+				for(int j=i+1 ; j<nbounds ; j++){
+
+					x2 = CoordList[3*j];
+					y2 = CoordList[3*j+1];
+					z2 = CoordList[3*j+2];
+
+					Deltx1 = x1-xCent;
+					Delty1 = y1-yCent;
+					Deltz1 = z1-zCent;
+
+					Deltx2 = x2-xCent;
+					Delty2 = y2-yCent;
+					Deltz2 = z2-zCent;
+
+					deltxx = x1-x2; 					
+					deltyy = y1-y2; 					
+					deltzz = z1-z2;					
+					
+					valx1=min3(pow(Deltx1,2),pow(Deltx1-acell0,2),pow(Deltx1+acell0,2));													
+					valy1=min3(pow(Delty1,2),pow(Delty1-acell1,2),pow(Delty1+acell1,2));
+					valz1=min3(pow(Deltz1,2),pow(Deltz1-acell2,2),pow(Deltz1+acell2,2));
+
+					dist1=valx1+valy1+valz1;
+
+					valx2=min3(pow(Deltx2,2),pow(Deltx2-acell0,2),pow(Deltx2+acell0,2));
+					valy2=min3(pow(Delty2,2),pow(Delty2-acell1,2),pow(Delty2+acell1,2));
+					valz2=min3(pow(Deltz2,2),pow(Deltz2-acell2,2),pow(Deltz2+acell2,2));
+
+					dist2=valx2+valy2+valz2;
+				
+					valxx = min3(pow(deltxx,2),pow(deltxx-acell0,2),pow(deltxx+acell0,2));
+					valyy = min3(pow(deltyy,2),pow(deltyy-acell1,2),pow(deltyy+acell1,2));
+					valzz = min3(pow(deltzz,2),pow(deltzz-acell2,2),pow(deltzz+acell2,2));
+
+					distij = valxx+valyy+valzz;
+
+					
+					if(dist1==0||dist2==0){
+					AnglesList[(int)AnglesList[0]]=0.0;
+					}
+					else{
+					AnglesList[(int)AnglesList[0]] = acos((dist1+dist2-distij)/(2*sqrt(dist1*dist2)))*180/3.141592653589793;
+					}
+					AnglesList[0]++;
+				}
+			}
+		}
+	}
+	return AnglesList;
+} int atom_to_indexB(int atom,int CentMin,int CentMax,int OutMin,int OutMax){//Gives, in the BondIndexes tab, the index of the data pertaining to the atom.
 
 	int place;
 	if(CentMax<=OutMax){
