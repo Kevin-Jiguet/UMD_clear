@@ -161,7 +161,7 @@ def main(argv):
             print ('bond.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -i <InputFile> -n <NumCells>')
             print ('  default values: -f output.umd.dat -s 1 -l None -n 5')
             print ('The input file contains the bond lengths for the different atom pairs. \n The option -l overwrites all the values of this file.')
-            print ('The option -n states the number of sub-cells the script will work with. \n For an optimal functionment, -n should be as high as possible \n as long as the dimension of the sub-cells is higher than the biggest bond length.)
+            print ('The option -n states the number of sub-cells the script will work with. \n For an optimal functionment, -n should be as high as possible \n as long as the dimension of the sub-cells is higher than the biggest bond length.')
             sys.exit()
         elif opt in ("-l","--lmaxlength"):
             if(arg!=""):
