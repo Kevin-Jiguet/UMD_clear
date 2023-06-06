@@ -207,7 +207,7 @@ def main(argv):
             
 
     natom=MyCrystal.natom
-    FileAll=UMDname[:-8]+'.bondingfile.dat'
+    FileAll=UMDname[:-8]+'.bonding.dat'
     print ('Bonds will be written in <',FileAll,'> file')
     fa=open(FileAll,'w')
     ff=open(UMDname,'r')
