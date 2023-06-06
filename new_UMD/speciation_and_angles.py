@@ -222,12 +222,14 @@ def main(argv):
     for opt, arg in opts:
         if opt == '-h':
             print ('speciation.py program to compute bonding maps and identify speciation')
-            print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
+            print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Central> -a <Adjacent> -m <MinLife> -r <Rings> -n <nChunks>')
             print ('  default values: -f bonding.umd.dat -s 1 -m 0 -r 1 -n 4')
             print (' the bond file contains the bonds relations for each snapshot. Computed with Bond_par_C.py.')
             print (' -r : rings = 1 default, all adjacent atoms bind to central atoms ; rings = 0, polymerization, all adjacent atoms bind to central AND other adjacent atoms ; rings = x>0, all adjacent atoms bind to central then to other adjacent atoms to form a xth-coordination polyhedra')
             print (' -m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
             print (' -n : number of chunks for the praallelization of the clusters data ; default 8')
+            print (' -c and -a : respectively, name of the elements that are designated to be central and adjacent in the formation of the clusters')
+            print (' This script will also calculate the angles within clusters (adj - cent - adj) if and only if the -r parameter is set to 1')
             sys.exit()
         elif opt in ("-f", "--fBondFile"):
             BondFile = str(arg)
@@ -242,14 +244,12 @@ def main(argv):
             nChunks = int(arg)
         elif opt in ("-u","uUMDFile"):
             UMDFile = str(arg)
-        elif opt in ("-c","--Cations"):
+        elif opt in ("-c","--Central"):
             header = header + ' -c=' + arg
-            Cations = arg.split(",")
-            #print ('Cation list is: ',Cations)
-        elif opt in ("-a","--Anions"):
+            Central = arg.split(",")
+        elif opt in ("-a","--Adjacent"):
             header = header + ' -a=' + arg
-            Anions= arg.split(",")
-            #print ('Anion list is: ',Anions)
+            Adjacent= arg.split(",")
         elif opt in ("-r","--rRings"):
             rings = int(arg)
             if rings == 0:
@@ -271,11 +271,11 @@ def main(argv):
         print ('the UMD file ',UMDFile,' does not exist')            
         sys.exit()
 
-    for ii in range(len(Cations)):
-        ClusterAtoms.append(Cations[ii])
-    for ii in range(len(Anions)):
-        if Anions[ii] not in ClusterAtoms:
-            ClusterAtoms.append(Anions[ii])
+    for ii in range(len(Central)):
+        ClusterAtoms.append(Central[ii])
+    for ii in range(len(Adjacent)):
+        if Adjacent[ii] not in ClusterAtoms:
+            ClusterAtoms.append(Adjacent[ii])
                   
     (MyCrystal,TimeStep)=Crystallization(BondFile)    
 
@@ -287,11 +287,11 @@ def main(argv):
             if MyCrystal.elements[MyCrystal.typat[iatom]]==ClusterAtoms[jatom]:
                 ligands.append(iatom)              #contains the list with the index of the ligand atoms from the 0 ... natom
     for iatom in range(MyCrystal.natom):
-        for jatom in range(len(Cations)):
-            if MyCrystal.elements[MyCrystal.typat[iatom]]==Cations[jatom]:
+        for jatom in range(len(Central)):
+            if MyCrystal.elements[MyCrystal.typat[iatom]]==Central[jatom]:
                 centralatoms.append(iatom)         #contains the list with the index of the central atoms from the 0 ... natom
-        for jatom in range(len(Anions)):
-            if MyCrystal.elements[MyCrystal.typat[iatom]]==Anions[jatom]:
+        for jatom in range(len(Adjacent)):
+            if MyCrystal.elements[MyCrystal.typat[iatom]]==Adjacent[jatom]:
                 outeratoms.append(iatom)           #contains the list with the index of the coordinating atoms from the 0 ... natom
 
     print('All ligands are: ',ligands)
@@ -299,10 +299,10 @@ def main(argv):
     print('Coordinating atoms are :',outeratoms)
     
     if centralatoms == []:
-        print("ERROR : element ",Cations," not present in simulation")
+        print("ERROR : element ",Central," not present in simulation")
         sys.exit()
     if outeratoms == []:
-        print("ERROR : element ",Anions," not present in simulation")
+        print("ERROR : element ",Adjacent," not present in simulation")
         
     
     print("Preparing the files to be read...")
