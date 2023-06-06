@@ -18,7 +18,7 @@ path_new=''
 for u in path_red:
     path_new+='/'+u
 
-acorr_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_correlate_H.so'))
+acorr_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_correlate.so'))
 acorr_lib.compute_autocorrelation.argtype = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.c_int,ctypes.c_int,ctypes.c_int, ctypes.c_int]
 acorr_lib.compute_autocorrelation.restype = None
 
