@@ -221,8 +221,8 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('speciation.py program to compute bonding maps and identify speciation')
-            print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Central> -a <Adjacent> -m <MinLife> -r <Rings> -n <nChunks>')
+            print ('speciationand_angles.py program to identify speciation and compute angles')
+            print ('speciation_angles.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Central> -a <Adjacent> -m <MinLife> -r <Rings> -n <nChunks>')
             print ('  default values: -f bonding.umd.dat -s 1 -m 0 -r 1 -n 4')
             print (' the bond file contains the bonds relations for each snapshot. Computed with Bond_par_C.py.')
             print (' -r : rings = 1 default, all adjacent atoms bind to central atoms ; rings = 0, polymerization, all adjacent atoms bind to central AND other adjacent atoms ; rings = x>0, all adjacent atoms bind to central then to other adjacent atoms to form a xth-coordination polyhedra')
