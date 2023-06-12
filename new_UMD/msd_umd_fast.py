@@ -78,7 +78,7 @@ def main(argv):
         elif opt in ("-b", "--bBallistic"):
             ballistic = int(arg)
         elif opt in ("-x","--xAtoms"):
-            a=str(arg)
+            x=str(arg)
             
     if (os.path.isfile(umdfile)):
         
