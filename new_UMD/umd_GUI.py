@@ -1,13 +1,16 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QTabWidget
-import Bond_par_C
+import Bond_fast
 import speciation_fast
 import speciation_and_angles
 import VaspParser_ML
 import LAMMPSParser_Standard
 import vibr_spectrum_umd
 import umd_to_lammps
-from PyQt5.QtWidgets import QCheckBox, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QFileDialog
+import gofr_umd
+import msd_umd_fast
+import viscosity_new
+from PyQt5.QtWidgets import QCheckBox, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QFileDialog, QRadioButton, QButtonGroup, QSpacerItem
 import os
 
 
@@ -18,11 +21,20 @@ def isfloat(n):
     except ValueError :
         return False
 
+def usefunction(funct,argv):
+    try :
+        funct.main(argv)
+        return True
+    except Exception as e :
+        return e
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("Magmatix : a tool for the use of raw VASP and LAMMPS data files")
+        self.setMinimumSize(0,0)
         self.resize(600,600)
         
         
@@ -61,20 +73,24 @@ class MainWindow(QMainWindow):
         Speciation_widget = QWidget()
         LAMMPSParser_widget = QWidget()
         Vibration_widget = QWidget()
-        Viscosity_widget = QWidget()        
+        viscosity_widget = QWidget()        
         msd_widget = QWidget()
         UMDtoLAMMPS_widget = QWidget()
+        gofr_widget = QWidget()
+        msd_widget = QWidget()        
+
 
         # Ajout des onglets au widget à onglets
         convert_tab.addTab(UMD_widget, "VASP to UMD")
         convert_tab.addTab(LAMMPSParser_widget, "LAMMPS to UMD")
         convert_tab.addTab(UMDtoLAMMPS_widget, "UMD to LAMMPS")
-        operations_tab.addTab(Bond_widget, "Computation of the bonding file")
-        operations_tab.addTab(Speciation_widget, "Computation of the population file")
-        calculations_tab.addTab(Vibration_widget,"Calculation of the vibrational spectrum")
-        calculations_tab.addTab(Viscosity_widget,"Calculation of the viscosity parameters")
-        calculations_tab.addTab(msd_widget,"Calculation of the mean square deviation")
-
+        operations_tab.addTab(gofr_widget,"Creation of the average bonds file")
+        operations_tab.addTab(Bond_widget, "Creation of the bonding file")
+        operations_tab.addTab(Speciation_widget, "Creation of the population file")
+        calculations_tab.addTab(Vibration_widget,"Vibrational spectrum")
+        calculations_tab.addTab(viscosity_widget,"Viscosity parameters")
+        calculations_tab.addTab(msd_widget,"Mean square deviation")
+        
 
         # Création du contenu des onglets
         self.create_Vibration_layout(Vibration_widget)
@@ -85,8 +101,9 @@ class MainWindow(QMainWindow):
         self.create_Bond_layout(Bond_widget)
         self.create_Speciation_layout(Speciation_widget)
         self.create_UMD_to_LAMMPS_layout(UMDtoLAMMPS_widget)
-
-
+        self.create_gofr_layout(gofr_widget)
+        self.create_msd_layout(msd_widget)
+        self.create_viscosity_layout(viscosity_widget)
         # Définition du widget à onglets comme widget central de la fenêtre principale
         main_tab.addTab(convert_widget,"Conversions")
         main_tab.addTab(operations_widget,"Operations")
@@ -94,13 +111,231 @@ class MainWindow(QMainWindow):
         
         self.setCentralWidget(main_tab)
         
+    def create_viscosity_layout(self,tab_widget):
+        layout = QVBoxLayout()
         
+        self.umdfile_vsc_edit = QLineEdit()
+        self.umdfile_vsc=""
+        selectButton = QPushButton("Select the UMD file")
+        computeButton = QPushButton("Compute")
+        self.i_vsc = QLineEdit("0")
+        self.n_vsc = QLineEdit("2000")
+        
+        selectButton.clicked.connect(self.select_UMDfile_vsc)
+        computeButton.clicked.connect(self.compute_vsc)
+        self.umdfile_vsc_edit.textChanged.connect(self.changeumd_vsc)
+        self.vscmessage=QLabel("")
+        
+        layout.addWidget(self.umdfile_vsc_edit)
+        layout.addWidget(selectButton)
+        layout.addWidget(QLabel("Enter the index of the initial step :"))
+        layout.addItem(QSpacerItem(0,-60))
+        layout.addWidget(self.i_vsc)
+        layout.addWidget(QLabel("Enter the value of lag for autocorrelation (fs) :"))
+        layout.addItem(QSpacerItem(0,-60))
+        layout.addWidget(self.n_vsc)
+        layout.addItem(QSpacerItem(0,60))
+        layout.addWidget(computeButton)
+        layout.addWidget(self.vscmessage)
+        
+        tab_widget.setLayout(layout)
+        
+        
+    def select_UMDfile_vsc(self):
+        file_dialog = QFileDialog(self)
+        self.umdfile_vsc, _ = file_dialog.getOpenFileName()
+        self.umdfile_vsc_edit.setText(self.umdfile_vsc) 
 
+    def changeumd_vsc(self):
+        self.umdfile_vsc = self.umdfile_vsc_edit.text()
 
+    def compute_vsc(self):
+        if not os.path.isfile(self.umdfile_vsc):
+            self.vscmessage.setText("Error : the UMD file "+self.umdfile_vsc+" is displaced or missing. Pleace check the path or the file name.")
+        elif not self.i_vsc.text().isnumeric() or int(self.n_vsc.text())<0:
+            self.vscmessage.setText("Error : the index of the initial step must be a positive integer.")
+        elif not self.n_vsc.text().isnumeric() or int(self.n_vsc.text())<0:
+            self.vscmessage.setText("Error : the vertical step must be a positive integer.")
+        else :
+            argv = ["-f",self.umdfile_vsc,"-i",self.i_vsc.text(),"-n",self.n_vsc.text()]
+            result = usefunction(viscosity_new,argv)
+            if result==True :
+                Name = self.umdfile_vsc.split("/")
+                name = Name[-1][:-8]+".visc.dat"
+                self.vscmessage.setText("Viscosity file successfully created under the name "+name)
+            else :
+                self.vscmessage.setText("The error : < "+str(result)+" > has occured. Please check the validity of the file and arguments you provided.")    
 
-
+        
+        
+    def create_msd_layout(self,tab_widget):
+        layout = QVBoxLayout()
+        
+        self.umdfile_msd_edit = QLineEdit()
+        self.umdfile_msd=""
+        selectButton = QPushButton("Select the UMD file")
+        computeButton = QPushButton("Compute")
+        self.z_msd = QLineEdit("1")
+        self.v_msd = QLineEdit("1")
+        self.b_msd = QLineEdit("0")
+        
+        selectButton.clicked.connect(self.select_UMDfile_msd)
+        computeButton.clicked.connect(self.compute_msd)
+        self.umdfile_msd_edit.textChanged.connect(self.changeumd_msd)
+        self.msdmessage=QLabel("")
+        self.atoms = QRadioButton("msd of individual atoms")
+        self.elements = QRadioButton("msd of each element")
+        buttongroup = QButtonGroup()
+        buttongroup.addButton(self.atoms)
+        buttongroup.addButton(self.elements)
+        self.atoms.setChecked(True)
+        
+        layout.addWidget(self.umdfile_msd_edit)
+        layout.addWidget(selectButton)
+        layout.addWidget(QLabel("Enter the value of the horizontal jump :"))
+        layout.addItem(QSpacerItem(0,-20))
+        layout.addWidget(self.z_msd)
+        layout.addWidget(QLabel("Enter the value of the vertical jump :"))
+        layout.addItem(QSpacerItem(0,-20))
+        layout.addWidget(self.v_msd)
+        layout.addWidget(QLabel("Enter the lenght of the ballistic regime :"))
+        layout.addItem(QSpacerItem(0,-20))
+        layout.addWidget(self.b_msd)
+        layout.addWidget(QLabel("Choose the data form to displayed in the output file :"))
+        layout.addItem(QSpacerItem(0,-20))
+        layout.addWidget(self.atoms)
+        layout.addWidget(self.elements)
+        layout.addWidget(QLabel(""))
+        layout.addWidget(computeButton)
+        layout.addWidget(self.msdmessage)
+        
+        tab_widget.setLayout(layout)
     
         
+    def select_UMDfile_msd(self):
+        file_dialog = QFileDialog(self)
+        self.umdfile_msd, _ = file_dialog.getOpenFileName()
+        self.umdfile_msd_edit.setText(self.umdfile_msd) 
+
+    def changeumd_msd(self):
+        self.umdfile_msd = self.umdfile_msd_edit.text()
+
+    def compute_msd(self):
+        if not os.path.isfile(self.umdfile_msd):
+            self.msdmessage.setText("Error : the UMD file "+self.umdfile_msd+" is displaced or missing. Pleace check the path or the file name.")
+        elif not self.z_msd.text().isnumeric() or int(self.z_msd.text())<1:
+            self.gofrmessage.setText("Error : the horizontal jump must be a strictly positive integer.")
+        elif not self.v_msd.text().isnumeric() or int(self.v_msd.text())<1:
+            self.gofrmessage.setText("Error : the vertical step must be a strictly positive integer.")
+        elif not self.b_msd.text().isnumeric() or int(self.b_msd.text())<0:
+            self.gofrmessage.setText("Error : the length of the ballistic regime must be a positive integer.")
+        else :
+            if self.atoms.isChecked():                
+                argv = ["-f",self.umdfile_msd,"-z",self.z_msd.text(),"-v",self.v_msd.text(),"-b",self.b_msd.text(),"-x","atoms"]
+            else :
+                argv = ["-f",self.umdfile_msd,"-z",self.z_msd.text(),"-v",self.v_msd.text(),"-b",self.b_msd.text(),"-x","elements"]
+            result = usefunction(msd_umd_fast,argv)
+            if result==True :
+                Name = self.umdfile_msd.split("/")
+                name = Name[-1][:-8]+".msd.dat"
+                self.msdmessage.setText("msd file successfully created under the name "+name)
+            else :
+                self.msdmessage.setText("The error : < "+str(result)+" > has occured. Please check the validity of the file and arguments you provided.")    
+        
+    
+    
+    
+    
+    
+    
+    
+        
+
+    def create_gofr_layout(self,tab_widget):
+        layout = QVBoxLayout()
+        
+        self.umdfileg_edit = QLineEdit()
+        self.umdfileg=""
+        selectButton = QPushButton("Select the UMD file")
+        computeButton = QPushButton("Compute")
+        self.s_g = QLineEdit("1")
+        self.d_g = QLineEdit("1")
+        self.i_g = QLineEdit("0")
+        self.gpu = False
+
+        self.gpubox = QCheckBox("Use gpu portage (be sure your computer is configured to handle it !)")
+        self.gpubox.stateChanged.connect(self.changedgpubox)
+        
+        selectButton.clicked.connect(self.select_UMDfile_gofr)
+        computeButton.clicked.connect(self.compute_gofr)
+        self.umdfileg_edit.textChanged.connect(self.changeumdg)
+        self.gofrmessage=QLabel("")
+        
+        
+        layout.addWidget(self.umdfileg_edit)
+        layout.addWidget(selectButton)
+        layout.addWidget(QLabel(""))
+
+        layout.addWidget(QLabel("Enter the sampling frequency :"))
+        layout.addWidget(self.s_g)
+        layout.addWidget(QLabel(""))
+
+        layout.addWidget(QLabel("Enter the discretization interval :"))
+        layout.addWidget(self.d_g)
+        layout.addWidget(QLabel(""))
+ 
+        layout.addWidget(QLabel("Enter the index of the initial step :"))
+        layout.addWidget(self.i_g)
+        layout.addWidget(QLabel(""))
+        layout.addWidget(self.gpubox)
+        layout.addWidget(QLabel(""))
+        layout.addWidget(QLabel(""))
+        layout.addWidget(computeButton)
+        layout.addWidget(self.gofrmessage)
+        
+        tab_widget.setLayout(layout)
+        
+        
+    def select_UMDfile_gofr(self):
+        file_dialog = QFileDialog(self)
+        self.umdfileg, _ = file_dialog.getOpenFileName()
+        self.umdfileg_edit.setText(self.umdfileg) 
+
+    def changeumdg(self):
+        self.umdfileg = self.umdfileg_edit.text()
+
+    def changedgpubox(self,state):
+        if state == 2:
+            self.gpu = True
+        else : 
+            self.gpu = False
+
+    def compute_gofr(self):
+        if not os.path.isfile(self.umdfileg):
+            self.gofrmessage.setText("Error : the file "+self.umdfileg+" is displaced or missing. Pleace check the path or the file name.")
+        elif not self.s_g.text().isnumeric() or int(self.s_g.text())<1:
+            self.gofrmessage.setText("Error : the sampling frequency must be a strictly positive integer.")
+        elif not self.d_g.text().isnumeric() or int(self.d_g.text())<1:
+            self.gofrmessage.setText("Error : the discretization interval must be a strictly positive integer.")
+        elif not self.i_g.text().isnumeric() or int(self.i_g.text())<0:
+            self.gofrmessage.setText("Error : the initial step must be a positive integer.")
+        else :
+            argv = ["-f",self.umdfileg,"-s",self.s_g.text(),"-d",self.d_g.text(),"-i",self.i_g.text(),"-g","use_gpu="+str(self.gpu)]
+            result = usefunction(gofr_umd,argv)
+            if result==True :
+                Name = self.umdfileg.split("/")
+                name = Name[-1][:-8]+".gofr.dat"
+                self.gofrmessage.setText("gofr file successfully created under the name "+name)
+            else :
+                self.gofrmessage.setText("The error : < "+str(result)+" > has occured. Please check the validity of the file and arguments you provided.")
+
+
+
+
+
+
+
+
     def create_Vibration_layout(self,tab_widget):
         layout = QVBoxLayout()
         
@@ -236,6 +471,12 @@ class MainWindow(QMainWindow):
             self.L2Umessage.setText("The UMD file has been successfully created under the name "+name)
 
 
+
+
+
+
+
+
     def create_UMD_layout(self,tab_widget):
         layout = QVBoxLayout()
         
@@ -366,28 +607,27 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(self.bondfile_edit)
         layout.addWidget(selectbondbutton)
-        layout.addWidget(QLabel(""))
-        layout.addWidget(QLabel(""))
+        layout.addItem(QSpacerItem(0,30))
         layout.addWidget(QLabel("Central atom :"))
         layout.addWidget(self.centralatom_edit)
+        layout.addItem(QSpacerItem(0,30))
         layout.addWidget(QLabel("Outer atom :"))
         layout.addWidget(self.outeratom_edit)
-        layout.addWidget(QLabel(""))
+        layout.addItem(QSpacerItem(0,30))
         layout.addWidget(QLabel("Enter the degree of coordination :"))
         layout.addWidget(self.rings_edit)
         layout.addWidget(self.rings)
         layout.addWidget(self.angles)
+        layout.addItem(QSpacerItem(0,15))
         layout.addWidget(self.umdfileSpec_edit)
         layout.addWidget(self.umdSpecbutton)
-        layout.addWidget(QLabel(""))
-        layout.addWidget(QLabel(""))
+        layout.addItem(QSpacerItem(0,30))
         layout.addWidget(submit_button)
         layout.addWidget(self.populname)
-        layout.addWidget(QLabel(""))
-        layout.addWidget(QLabel(""))        
+        layout.addItem(QSpacerItem(0,30))
         layout.addWidget(self.error_message_spec)
         
-        layout.setSpacing(2)
+#        layout.setSpacing(2)
         layout.setContentsMargins(0,20,0,200)
         
         tab_widget.setLayout(layout)
@@ -532,6 +772,8 @@ class MainWindow(QMainWindow):
                     self.error_message.setText("Please select an input file or set manually the value of the bonding length before launching the computation.")
                 else :
                     self.error_message.setText("Error : the file "+self.inpfile_edit.text()+" is displaced or missing. Please check the path or file name.") 
+#            elif not(isfloat(self.l_edit.text())) or float(self.l_edit.text())<0 :        
+#                self.error_message.setText("Please set the value of the bond length with a positive number (or nothing).")
             elif not(self.s_edit.text().isnumeric()) or int(self.s_edit.text())<1 :        
                 self.error_message.setText("The value of the sampling frequency has to be a strictly positive integer.")
             else :
@@ -544,7 +786,7 @@ class MainWindow(QMainWindow):
                     self.error_message.setText("The explicit value of "+self.l_edit.text()+" (Angströms) has been used to determine the bonds.")
 
                 self.bondname.setText("Computing...")
-                Bond_par_C.main(argv) 
+                Bond_fast.main(argv) 
                 self.bondname.setText("Bonds file successfully created under the name "+self.umdfile.split("/")[-1][:-8]+".bondingfile.dat") 
                 self.bondfile_edit.setText(self.umdfile[:-8]+".bondingfile.dat")
 
