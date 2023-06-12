@@ -171,8 +171,8 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('speciation.py program to compute bonding maps and identify speciation')
-            print ('speciation.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
+            print ('speciation_fast.py program to identify speciation')
+            print ('speciation_fast.py -f <Bonding_filename> -s <Sampling_Frequency> -l <MaxLength> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
             print ('  default values: -f bonding.umd.dat -s 1 -m 0 -r 1 -n 4')
             print (' the bond file contains the bonds relations for each snapshot. Computed with Bond_par_C.py.')
             print (' -r : rings = 1 default, all anions bind to cations ; rings = 0, polymerization, all anions bind to cations AND anions ; rings = x>0, all anions bind to cations then to other anions to form a xth-coordination polyhedra')
