@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Magmatix : a tool for the use of raw VASP and LAMMPS data files")
         self.setMinimumSize(0,0)
-        self.resize(10,10)
+        self.resize(600,600)
         
         
         mainWidget = QWidget()        
@@ -371,7 +371,7 @@ class MainWindow(QMainWindow):
         self.UMDfileVib_edit.textChanged.connect(self.changevib)
 
         hboxT=QHBoxLayout()
-        hboxT.addWidget(QLabel("Select the temperature (default 5000 K)"))
+        hboxT.addWidget(QLabel("Select the temperature (default 5000 K) :"))
         hboxT.addWidget(self.temperature_edit)
                 
         
@@ -399,7 +399,7 @@ class MainWindow(QMainWindow):
             self.messageVib.setText("Error : the temperature must be a strictly positive integer.")
         else :
             self.messageVib.setText("Computing...") 
-            result=usefunction(vibr_spectrum_umd.main,argv,self.messageVib)
+            result=usefunction(vibr_spectrum_umd,argv,self.messageVib)
             if result==True :
                 self.messageVib.setText("Vibrational spectrum successfully calculated. Files created under the names "+self.UMDfileVib[:-8]+".vels.scf.dat and "+self.UMDfileVib[:-8]+".vibr.dat")
 
