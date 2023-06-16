@@ -1,5 +1,4 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QTabWidget
 import Bond_fast
 import speciation_fast
 import speciation_and_angles
@@ -10,7 +9,9 @@ import umd_to_lammps
 import gofr_umd
 import msd_umd_fast
 import viscosity_new
-from PyQt5.QtWidgets import QCheckBox, QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QFileDialog, QRadioButton, QButtonGroup, QSpacerItem,QHBoxLayout
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from PyQt5.QtWidgets import QCheckBox, QApplication, QMainWindow, QLabel, QLineEdit, QTabWidget, QPushButton, QVBoxLayout, QWidget, QFileDialog, QRadioButton, QButtonGroup, QSpacerItem,QHBoxLayout,QGridLayout
 import os
 
 
@@ -21,13 +22,118 @@ def isfloat(n):
     except ValueError :
         return False
 
-def usefunction(funct,argv,message):
+def usefunction(funct,argv,message):#used to call a function outside this script
     try :
         funct.main(argv)
         return True
     except Exception as e :
         message.setText("The error : < "+str(e)+" > has occured. Please check the validity of the file and arguments you provided.")
         return False
+
+
+
+def clearLayout(layout):#Clears the layout to display the next graphs
+    while layout.count():
+        item = layout.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+        elif item.layout():
+            while item.layout().count():
+                item_int = item.layout().takeAt(0)
+                if item_int.widget():
+                    item_int.widget().deleteLater()
+            
+def creategraph_visc(Tau,Visc,layout):#Creates the viscosity graph
+    clearLayout(layout)
+    figure=Figure(figsize=(10,10))
+    Title = QLabel("Mean viscosity in Pa*s as a function of lag time (fs)")
+    Title.setStyleSheet("font-size: 16px;")
+    Title.setFixedSize(500,20)
+    ax=figure.add_subplot(111)
+    ax.plot(Tau,Visc)
+    figure.tight_layout()
+    canvas=FigureCanvas(figure)
+    layout.addWidget(Title,0,0)
+    layout.addWidget(canvas,1,0)
+
+def read_visc(viscfile):#Reads the viscosity file
+    ff=open(viscfile,"r")
+    ff.readline()
+    ff.readline()
+    Tau=[]
+    Visc=[]
+    while True :
+        line=ff.readline()
+        if not line :
+            break
+        l=line.strip().split()
+
+        Tau.append(float(l[0]))
+        Visc.append(float(l[-1]))
+    
+    return Tau,Visc
+
+def createhist_vib(DOS,Freq,Elements,layout,types):#Creates the histograms of vibrational spectrum
+    clearLayout(layout)
+    n = len(Elements)
+    natom = sum(types)
+    types.append(natom)
+    ncol=int((n+1)/3)
+    Title = QLabel("x : DOS of vib.spectrum ; y : wavenumber (cm⁻¹)")
+    Title.setStyleSheet("font-size: 16px;")
+    layout.addWidget(Title,0,0)    
+    for i in range(n):
+        layout_int = QVBoxLayout()
+        row=int(i/ncol)+1
+        col=i%ncol
+        figure = Figure(figsize=(3,3))
+        ax = figure.add_subplot(111)
+        DOSnorm = [DOS[i][j]/(3*types[i]) for j in range(len(DOS[i]))]
+        ax.bar(Freq[:50],DOSnorm[:50],width=Freq[1]-Freq[0])
+        ax.set_title(Elements[i])
+        ax.set_xlim(left=0)
+        canvas = FigureCanvas(figure)
+        layout_int.addWidget(canvas)
+        layout.addLayout(layout_int,row,col)
+        
+def read_vibr(vibfile,ncol):
+    ff=open(vibfile,'r')
+    DOS=[]
+    Freq=[]
+    ff.readline()
+    while True :
+        line = ff.readline().strip().split()
+        if not line :
+            break
+        DOS.append(float(line[ncol]))
+        Freq.append(float(line[0]))
+    ff.close()
+    return DOS,Freq
+
+def read_vibr_allEls(vibfile):#Reads all the elements of the vibr file to create the histograms
+    ff=open(vibfile,'r')
+    Elements=[]
+    Freq=[]
+    line = ff.readline().strip().split()
+    for label in line[1:-1]:
+        el = label.split("_")[-1]
+        Elements.append(el)
+    Elements.append("Total DOS")
+    print(Elements)
+    
+    DOS=[[] for _ in range(len(Elements))]
+
+    while True :
+        line = ff.readline().strip().split()
+        if not line :
+            break
+        for i in range((len(Elements))):
+            DOS[i].append(float(line[i+1]))
+        Freq.append(float(line[0]))
+    ff.close()
+    print(len(Freq))
+    print(len(DOS[0]))
+    return DOS,Freq,Elements
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +159,8 @@ class MainWindow(QMainWindow):
         convert_layout.addWidget(convert_tab)
         convert_widget.setLayout(convert_layout)
         
+        self.display_widget=QWidget()
+        self.create_display_layout()
         
         operations_widget=QWidget()
         operations_layout=QVBoxLayout()
@@ -109,8 +217,25 @@ class MainWindow(QMainWindow):
         main_tab.addTab(convert_widget,"Conversions")
         main_tab.addTab(operations_widget,"Operations")
         main_tab.addTab(calculations_widget,"Calculations")
-        
+        main_tab.addTab(self.display_widget,"Visual display")
         self.setCentralWidget(main_tab)
+
+
+    def create_display_layout(self):
+        
+        self.display_layout = QGridLayout()
+        self.display_layout.setContentsMargins(0,0,0,0)
+        self.display_file_edit = QLineEdit()
+    
+    
+    
+        self.display_widget.setLayout(self.display_layout)
+
+
+
+
+
+
         
     def create_viscosity_layout(self,tab_widget):
         layout = QVBoxLayout()
@@ -127,21 +252,29 @@ class MainWindow(QMainWindow):
         self.umdfile_vsc_edit.textChanged.connect(self.changeumd_vsc)
         self.vscmessage=QLabel("")
         
+        self.displayVisc=QCheckBox("Display the mean viscosity as a graph after calculation")
+        self.displayVisc.setChecked(True)
+        
         hboxIS = QHBoxLayout()
         hboxIS.addWidget(QLabel("Enter the index of the initial step :"))
         hboxIS.addWidget(self.i_vsc)
+        Precision = QLabel("This value shall not be greater than the total duration of the simulation.")
+        Precision.setFixedSize(500,20)
+        
         
         hboxLA = QHBoxLayout()
-        hboxLA.addWidget(QLabel("Enter the value of lag for autocorrelation (fs ; defalut 2000) :"))
+        hboxLA.addWidget(QLabel("Enter the value of lag for autocorrelation in fs (default 2000) :"))
         hboxLA.addWidget(self.n_vsc)
         layout.addWidget(self.umdfile_vsc_edit)
         layout.addWidget(selectButton)
-        layout.addItem(QSpacerItem(0,70))
+        layout.addItem(QSpacerItem(0,80))
         layout.addLayout(hboxIS)
-        layout.addItem(QSpacerItem(0,70))
+        layout.addItem(QSpacerItem(0,80))
         layout.addLayout(hboxLA)
-        layout.addItem(QSpacerItem(0,70))
+        layout.addWidget(Precision)
+        layout.addItem(QSpacerItem(0,80))
         layout.addWidget(computeButton)
+        layout.addWidget(self.displayVisc)
         layout.addWidget(self.vscmessage)
         
         tab_widget.setLayout(layout)
@@ -165,7 +298,13 @@ class MainWindow(QMainWindow):
         else :
             argv = ["-f",self.umdfile_vsc,"-i",self.i_vsc.text(),"-n",self.n_vsc.text()]
             result = usefunction(viscosity_new,argv,self.vscmessage)
-            if result==True :
+            if result==True and self.displayVisc.isChecked():
+                Name = self.umdfile_vsc.split("/")
+                name = Name[-1][:-8]+".visc.dat"
+                Tab,Visc=read_visc(name)
+                creategraph_visc(Tab,Visc,self.display_layout)
+                self.vscmessage.setText("Viscosity file successfully created under the name "+name+"\nViscosity showed in graphic form (see the tab <Visual Display> above).")
+            elif result :
                 Name = self.umdfile_vsc.split("/")
                 name = Name[-1][:-8]+".visc.dat"
                 self.vscmessage.setText("Viscosity file successfully created under the name "+name)
@@ -356,7 +495,7 @@ class MainWindow(QMainWindow):
 
 
     def create_Vibration_layout(self,tab_widget):
-        layout = QVBoxLayout()
+        self.layoutvib = QVBoxLayout()
         
         self.UMDfileVib=""
         self.messageVib=QLabel("")
@@ -378,15 +517,25 @@ class MainWindow(QMainWindow):
         ComputeVibButton = QPushButton("Compute vibrational spectrum")
         ComputeVibButton.clicked.connect(self.ComputeVib)
 
-        layout.addWidget(self.UMDfileVib_edit)
-        layout.addWidget(UMDButton)
-        layout.addItem(QSpacerItem(0,70))
-        layout.addLayout(hboxT)
-        layout.addItem(QSpacerItem(0,70))
-        layout.addWidget(ComputeVibButton)
-        layout.addItem(QSpacerItem(0,-10))
-        layout.addWidget(self.messageVib)
-        tab_widget.setLayout(layout)
+        self.displayVib = QCheckBox("Display the vibrational spectrums as ghraphs after calculation")
+        self.displayVib.setChecked(True)
+
+
+        self.layoutvib.addWidget(self.UMDfileVib_edit)
+        self.layoutvib.addWidget(UMDButton)
+        self.layoutvib.addItem(QSpacerItem(0,70))
+        self.layoutvib.addLayout(hboxT)
+        self.layoutvib.addItem(QSpacerItem(0,70))
+        self.layoutvib.addWidget(ComputeVibButton)
+        self.layoutvib.addWidget(self.displayVib)
+        self.layoutvib.addItem(QSpacerItem(0,-10))
+        self.layoutvib.addWidget(self.messageVib)
+        
+        tab_widget.setLayout(self.layoutvib)
+        
+        
+        
+        
 
     def ComputeVib(self):
         argv = ["-f",self.UMDfileVib,"-t",self.temperature]
@@ -399,9 +548,20 @@ class MainWindow(QMainWindow):
             self.messageVib.setText("Error : the temperature must be a strictly positive integer.")
         else :
             self.messageVib.setText("Computing...") 
+            ff=open(self.UMDfileVib,"r")
+            ff.readline()
+            ff.readline()
+            line=ff.readline().strip().split()
+            types = [int(line[i]) for i in range (1,len(line))]
+            ff.close()
             result=usefunction(vibr_spectrum_umd,argv,self.messageVib)
-            if result==True :
+            if result and self.displayVib.isChecked() :
+                self.messageVib.setText("Vibrational spectrum successfully calculated. Files created under the names "+self.UMDfileVib[:-8]+".vels.scf.dat and "+self.UMDfileVib[:-8]+".vibr.dat\nDOS showed in graphs (see the tab <Visual Display> above)")
+                DOS,Freq,Elements = read_vibr_allEls(self.UMDfileVib[:-8]+".vibr.dat")
+                createhist_vib(DOS, Freq, Elements, self.display_layout,types)
+            elif result :
                 self.messageVib.setText("Vibrational spectrum successfully calculated. Files created under the names "+self.UMDfileVib[:-8]+".vels.scf.dat and "+self.UMDfileVib[:-8]+".vibr.dat")
+                
 
     def select_UMDfileVib(self):
         file_dialog = QFileDialog(self)
@@ -840,7 +1000,7 @@ class MainWindow(QMainWindow):
                 self.bondmessage.setText("The explicit value of "+self.l_edit.text()+" (Angströms) has been used to determine the bonds.")
 
             self.bondmessage.setText("Computing...")
-            result = usefunction(Bond_fast,argv,self.bondname)
+            result = usefunction(Bond_fast,argv,self.bondmessage)
             if result :
                 self.bondmessage.setText("Bonds file successfully created under the name "+self.umdfile.split("/")[-1][:-8]+".bondingfile.dat") 
                 self.bondfile_edit.setText(self.umdfile[:-8]+".bondingfile.dat")
