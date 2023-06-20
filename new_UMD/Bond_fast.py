@@ -16,6 +16,7 @@ import concurrent.futures
 import numpy as np
 import ctypes
 from os.path import join
+import umd_processes_fast as umdpf
 
 current_path=os.path.abspath(__file__)#For all this to work, the file c_bonds_fullD.so must be in the same directory than gofr_umd
 path_split=current_path.split('/')
@@ -69,78 +70,7 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
             atom+=1
                 
     
-    return BondsList
-
-
-def read_xcart_only(umdfile,Nsteps):#reads the cartesian coordinate ; creates the Crystal
-    niter = 0
-    MyCrystal = cr.Lattice()
-    AllSnapshotsList = []
-    with open(umdfile,'r') as ff:
-        while True:
-            line = ff.readline()
-            if not line: break
-            #print(line,len(line))
-            if len(line) > 1:
-                line=line.strip()
-                entry=line.split()
-                if entry[0] == 'natom':
-                    MyCrystal.natom = int(entry[1])
-                    MyCrystal.typat = [0 for _ in range(MyCrystal.natom)]
-                elif entry[0] == 'ntypat':
-                    MyCrystal.ntypat = int(entry[1])
-                    MyCrystal.types = [0 for _ in range(MyCrystal.ntypat)]
-                    MyCrystal.elements = ['X' for _ in range(MyCrystal.ntypat)]
-                    MyCrystal.masses = [1.0 for _ in range(MyCrystal.ntypat)]
-                    MyCrystal.zelec = [1.0 for _ in range(MyCrystal.ntypat)]
-                elif entry[0] == 'types':
-                    for ii in range(MyCrystal.ntypat):
-                        MyCrystal.types[ii]=int(entry[ii+1])
-                elif entry[0] == 'elements':
-                    for ii in range(MyCrystal.ntypat):
-                        MyCrystal.elements[ii]=entry[ii+1]
-                elif entry[0] == 'masses':
-                    for ii in range(MyCrystal.ntypat):
-                        MyCrystal.masses[ii]=float(entry[ii+1])
-                elif entry[0] == 'Zelectrons':
-                    for ii in range(MyCrystal.ntypat):
-                        MyCrystal.zelec[ii]=float(entry[ii+1])
-                elif entry[0] == 'typat':
-                    for ii in range(MyCrystal.natom):
-                        MyCrystal.typat[ii] = int(entry[ii+1])
-                elif entry[0] == 'timestep':
-                    TimeStep = float(entry[1])
-                if entry[0] == 'acell':
-                    acell = [0,0,0]
-                    for ii in range(3):
-                        acell[ii] = float(entry[ii+1])
-                
-
-                if entry[0] == 'atoms:':
-                    print('reading file : current iteration no.',niter)
-                    MySnapshot = np.zeros((MyCrystal.natom,3),dtype=float)
-                    
-                    if int(niter/Nsteps)*Nsteps==niter:#to sample the file every "Nsteps" steps
-                        for iatom in range(MyCrystal.natom):
-                            line = ff.readline()
-                            line=line.strip()
-                            entry=line.split()
-                            coord=np.array([0.0,0.0,0.0])
-                            for jj in range(3):
-                                coord[jj]=math.fmod(float(entry[jj+3]),acell[jj])
-                            MySnapshot[iatom]=coord
-                        AllSnapshotsList.append(MySnapshot)
-                    
-                    else :
-                        for iatom in range(MyCrystal.natom):
-                            line = ff.readline()
-                            
-                    niter += 1
-
-    print('len of allsnapshots is',len(AllSnapshotsList))
-    
-    return(MyCrystal,AllSnapshotsList,acell,TimeStep)
-        
+    return BondsList        
 
 def main(argv):
     umdp.headerumd()
@@ -181,8 +111,6 @@ def main(argv):
         elif opt in ("-n", "--nNumCells"):
             numCells = int(arg)
             header = header + ' -n=' + arg
-        elif opt == "-v":
-            v=str(arg)
 
     if not (os.path.isfile(UMDname)):
         print ('the UMD files ',UMDname,' does not exist')            
@@ -192,7 +120,8 @@ def main(argv):
 
         
 
-    (MyCrystal,AllSnapshotsL,acell,TimeStep)=read_xcart_only(UMDname,Nsteps)#reads the cartesian coordinates and put then in AllSnapshotsL
+    MyCrystal,AllSnapshotsL,TimeStep,lensnap = umdpf.read_values(UMDname,"xcart",Nsteps)
+    acell=MyCrystal.acell
 
     if maxlength==None and len(InputFile)>0 :
         BondTable = read_inputfile(InputFile,MyCrystal)#Converts the input file into a matrix
@@ -207,7 +136,7 @@ def main(argv):
             
 
     natom=MyCrystal.natom
-    FileAll=UMDname[:-8]+'.bonding.dat'
+    FileAll=UMDname[:-8]+'.bondingB.dat'
     print ('Bonds will be written in <',FileAll,'> file')
     fa=open(FileAll,'w')
     ff=open(UMDname,'r')
@@ -222,6 +151,7 @@ def main(argv):
         
     with concurrent.futures.ProcessPoolExecutor() as executor :
         Lines=list(executor.map(WriteBondingRed,AllSnapshotsL,[step*Nsteps for step in range(len(AllSnapshotsL))]))#Calculates the bond profile for each snapshot
+
 
     step=0
     print("Writing...")
