@@ -11,7 +11,6 @@ Created on Tue May 30 09:44:43 2023
 
 import sys,getopt,os.path,itertools
 import crystallography as cr
-import umd_process as umdp
 import math
 import time
 from functools import partial
@@ -75,7 +74,7 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,Out
     return Clusters
 
 def main(argv):
-    umdp.headerumd()
+    umdpf.headerumd()
     BondFile='bonding.umd.dat'
     Nsteps = 1
     ClusterAtoms = []
@@ -197,9 +196,9 @@ def main(argv):
 
                 
         #Creating the output files        
-    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.populB.dat'
+    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
 #    print ('Population will be written in ',FileAll,' file')
-    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.statB.dat'
+    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.stat.dat'
 #    print ('Statistics will be written in ',FileStat,' file')
     header+="\n"            
                 
