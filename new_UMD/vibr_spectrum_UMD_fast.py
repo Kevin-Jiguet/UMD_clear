@@ -7,7 +7,6 @@
 import sys, getopt, os.path
 import numpy as np
 from scipy.fftpack import dct, fftfreq
-import umd_process as umd
 import umd_processes_fast as umdf
 import concurrent.futures
 from functools import partial
@@ -41,7 +40,7 @@ def correlation_par_C(posList,timestep,temperature):
 
 def main(argv):
     start_time=time.time()
-    umd.headerumd()
+    umdpf.headerumd()
     umdfile = 'output.umd.dat'
     temperature = 5000
 #    start_time  = time.time()
@@ -171,7 +170,7 @@ def main(argv):
     nf.close()
 
     end_time = time.time()
-    print('it takes ',(end_time-start_time)/60, 'mins to finish this job fast!')
+    print('it takes ',(end_time-start_time)/60, 'mins to finish this job !')
 
 if __name__ == "__main__":
    main(sys.argv[1:])
