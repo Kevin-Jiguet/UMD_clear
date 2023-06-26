@@ -7,8 +7,6 @@ Created on Mon May 22 10:55:47 2023
 """
 
 import sys,getopt,os.path,itertools
-import crystallography as cr
-import umd_process as umdp
 import math
 import time
 from functools import partial
@@ -73,7 +71,7 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
     return BondsList        
 
 def main(argv):
-    umdp.headerumd()
+    umdpf.headerumd()
     UMDname='output.umd.dat'
     Nsteps = 1
     InputFile = ''
@@ -120,7 +118,9 @@ def main(argv):
 
         
 
-    MyCrystal,AllSnapshotsL,TimeStep,lensnap = umdpf.read_values(UMDname,"xcart",Nsteps)
+#    (MyCrystal,AllSnapshotsLA,acell,TimeStep)=read_xcart_only(UMDname,Nsteps)#reads the cartesian coordinates and put then in AllSnapshotsL
+
+    MyCrystal,AllSnapshotsL,TimeStep,lensnap = umdpf.read_values(UMDname,"xcart","line",Nsteps)
     acell=MyCrystal.acell
 
     if maxlength==None and len(InputFile)>0 :
