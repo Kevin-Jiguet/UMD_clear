@@ -29,26 +29,38 @@ for u in path_red:
 read_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_UMDprocess.so'))
 read_lib.defineBonds.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
 read_lib.defineBonds.restype = ctypes.POINTER(ctypes.c_int)
-read_lib.read_umd_values.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int,ctypes.c_int]
+read_lib.read_umd_values.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int]
 read_lib.read_umd_values.restype = ctypes.POINTER(ctypes.c_double)
+read_lib.free_memory.argtypes = [ctypes.POINTER(ctypes.c_double)]
+read_lib.free_memory.restype = None
 
-def read_snapshot_values_C(octettop,octetbot,step,natom,File,X):#Extracts the coordinates from a snapshot 
-                                                                #the data is contained between the octets "octettop" and "octetbot" in the umd file (thus the prep_read_coord function)
-                                                                #The parameter X is the first index of the relevant coordinate on a line in the umd file
+
+def read_snapshot_values_C(octettop,octetbot,step,natom,File,X,mode):#Extracts the coordinates from a snapshot 
+                                                                #whose data is contained between the octets "octettop" and "octetbot" in the umd file (thus the prep_read_coord function)
+                                                                #The parameter X is the first index of the relevant 3 coordinate on each line in the umd file
     ff=open(File,"r")
     ff.seek(octettop,0)
     snapshot=ff.read(octetbot-octettop)
     ff.close()
     snapPointer = ctypes.c_char_p(snapshot.encode('utf-8'))
     
-    CList = read_lib.read_umd_values(snapPointer,natom,len(snapshot),X)
-
+    
+    CList=read_lib.read_umd_values(snapPointer,natom,X)
     SnapshotValues=[]
+    
     #Converts the C data into a python list
-
-
-    for i in range(3*natom):
-        SnapshotValues.append(round(CList[i],5))
+    if mode=="lists":#Returns a list of 3-elements list (x,y,z) for each atom
+        for i in range(natom):
+            SnapshotValues.append([round(CList[i],5),round(CList[i+1],5),round(CList[i+2],5)])
+    elif mode=="line":#Returns a unique list of values for all the atoms, atom after atom
+        for i in range(3*natom):
+            SnapshotValues.append(round(CList[i],5))
+    elif mode=="chunks":#Returns a unique list of values for all the atoms, axis after axis
+        for k in range(3):
+            for i in range(natom):
+                SnapshotValues.append(round(CList[3*i+k],5))
+    
+    read_lib.free_memory(CList)
     
     return SnapshotValues
 
@@ -76,8 +88,8 @@ def read_snapshotbonds_C(octettop,octetbot,CentMin,CentMax,OutMin,OutMax,File):#
     return SnapshotBondingTable,SnapshotBondIndexes
 
 def Octets_from_File(File,key,nlines):#Returns the indexes of octets pertaining to each snapshot in the file.
-    ff=open(File,"r")                 #"key" is the pattern that separates snapshots in the file
-    OctIndexes = []                   #"nlines"is the number of lines (atoms) in each snapshot
+    ff=open(File,"r")                 #"key" is the pattern that separates the successive snapshots in the file
+    OctIndexes = []                   #"nlines" is the number of lines pertaining to atoms in each snapshot
 
     print("Preparing the file ",File," to be read...")
     while True :
@@ -135,15 +147,25 @@ def Crystallization(File):#builds the Crystal
     return MyCrystal, TimeStep
 
 
-
-def read_values(UMDfile,key,Nsteps=1):
-    MyCrystal,TimeStep = Crystallization(UMDfile)
-    OctIndexes = Octets_from_File(UMDfile, 'atoms:', MyCrystal.natom)
+def read_values(UMDfile,key,mode="line",Nsteps=1,cutoff="no"):
     
+    t=time.time()
+    MyCrystal,TimeStep = Crystallization(UMDfile)
+    OctIndexesRaw = Octets_from_File(UMDfile, 'atoms:', MyCrystal.natom)
+    
+    if cutoff=="no":
+        cutoff = len(OctIndexesRaw)-1
+        
+    OctIndexes=OctIndexesRaw[:cutoff+1]
     OctTop = [OctIndexes[i*Nsteps] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates the beginning of each relevant snapshot
     OctBot = [OctIndexes[i*Nsteps+1] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates it's end
 
-    if key == "xcart":
+
+    if key == "xred":
+        X=0
+        print('Extracting the reduced coordinates from the file ',UMDfile)
+ 
+    elif key == "xcart":
         X=3
         print('Extracting the cartesian coordinates from the file ',UMDfile)
 
@@ -159,10 +181,17 @@ def read_values(UMDfile,key,Nsteps=1):
         print("Parameter < ",key," > not recognized")
         sys.exit()
 
-    readvalues = partial(read_snapshot_values_C,natom=MyCrystal.natom,File=UMDfile,X=X)
+    if mode!="line" and mode !="lists" and mode!="chunks":
+        print("Parameter < ",mode," > not recognized")
+        sys.exit()
+    
+        
+    
+    readvalues = partial(read_snapshot_values_C,natom=MyCrystal.natom,File=UMDfile,X=X,mode=mode)
     with concurrent.futures.ProcessPoolExecutor() as executor :
         SnapshotsValuesList = list(executor.map(readvalues,OctTop,OctBot,[step for step in range(len(OctIndexes)-1)]))        
 
+    print("Values extracted in ",(time.time()-t)," s")
     return MyCrystal, SnapshotsValuesList, TimeStep, len(OctIndexes)-1
 
 
@@ -222,3 +251,55 @@ def read_bonds(BondFile,centEl,adjEl):
     BondsIndexes = [D[1] for D in Data]
     
     return CentMin, CentMax, AdjMin, AdjMax, MyCrystal, Bonds, BondsIndexes, TimeStep
+
+
+def read_stresses_4visc(UMDfile):
+    ff=open(UMDfile,"r")
+    AllSnapshots=[]
+    
+    line = ff.readline().strip().split()
+    natom=int(line[1])
+    TimeStep=0
+    
+    while True : 
+        SnapshotCrystal = cr.Lattice()
+        flagheader=1
+        while flagheader :
+            l = ff.readline()
+            if not l :
+                l=ff.readline()
+                if not l :#If we encounter two empty lines in a row, we're at the end of the file
+                    print('len of allsnapshots is',len(AllSnapshots))
+                    return AllSnapshots,TimeStep
+            line = l.strip().split()
+            if len(line)>0 :
+                if line[0]=='timestep':
+                    TimeStep = float(line[1])
+                if line[0]=='atoms:':
+                    flagheader=0
+                elif line[0]=='rprimd_a':
+                    SnapshotCrystal.rprimd[0]=[float(line[ii]) for ii in range(1,4)]
+                elif line[0]=='rprimd_b':
+                    SnapshotCrystal.rprimd[1]=[float(line[ii]) for ii in range(1,4)]
+                elif line[0]=='rprimd_c':
+                    SnapshotCrystal.rprimd[2]=[float(line[ii]) for ii in range(1,4)]
+                elif line[0]=='StressTensor':
+                    SnapshotCrystal.stress=[float(line[i]) for i in range(1,7)]
+                elif line[0]=='Temperature':
+                    SnapshotCrystal.temperature=float(line[1])
+ 
+        SnapshotCrystal.cellvolume = SnapshotCrystal.makevolume()
+        AllSnapshots.append(SnapshotCrystal)
+        
+        for _ in range(natom):
+            next(ff)
+
+def headerumd():
+    print ('\n * * * * * ')
+    print ('    UMD package for analyzing Molecular Dynamics simulations.')
+    print ('distributed under GNU-GNU General Public License 3')
+    print ('please cite as: ')
+    print ('    Razvan Caracas, Jean-Alexis Hernandez, Anais Kobsch, Zhi Li, Natalia Solomatova, and Francois Soubiran' )
+    print ('    UMD: An open source package for analyzing Molecular Dynamics simulations' )
+    print ('    Journal of Visualized Experiments, in press/media prep (2020)' )
+    print (' ')
