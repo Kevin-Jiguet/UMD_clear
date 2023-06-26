@@ -3,6 +3,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <string.h>
 
 //This script is intended to work in tandem with the python script umd_processes_fast.py
 //It's main purpose is to read a snapshot and to extract the wanted information and only this
@@ -25,8 +26,15 @@ double min3(double a, double b, double c){
 
 }
 
-double* read_umd_values(char *MySnapshot, int nAtoms, int len, int X){//reads some specifics values of a snapshot and returns it in a tab
 
+void free_memory(double *Tab){
+	free(Tab);
+}
+
+
+double* read_umd_values(char *MySnapshot, int nAtoms, int X){//reads some specifics values of a snapshot and returns it in a tab
+
+	int len = 0;
 	int depth = 0;
 	int atom = 0;
 	int flagcoord = 0;//If we're on the right place on the line to read the values
@@ -38,11 +46,14 @@ double* read_umd_values(char *MySnapshot, int nAtoms, int len, int X){//reads so
 	double* Values;
 	int lineIndex=0;//index on the line of the number we are looking at
 	Values = calloc(3*nAtoms,sizeof(double));
+	len = strlen(MySnapshot);
 	for(int i=0 ; i<len ; i++){
 
 		if(MySnapshot[i]==' '){	
 			if(flagcoord){
-				Values[3*atom+lineIndex-X]=number*sign*pow(10,exp*signexp);
+				if(atom<nAtoms){
+					Values[3*atom+lineIndex-X]=number*sign*pow(10,exp*signexp);
+				}
 				flagcoord=0;
 			}
 			exp=0;
