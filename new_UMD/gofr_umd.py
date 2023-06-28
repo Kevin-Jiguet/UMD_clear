@@ -15,7 +15,7 @@ from distutils.util import strtobool
 #from . import _gofr
 #from . import gpu_utils
 import crystallography as cr
-import umd_process as umdp
+import umd_processes_fast as umdpf
 import gpu_utils
 import ctypes
 from os.path import join
@@ -226,7 +226,7 @@ def read_umd(umdfile, Nsteps, discrete, InitialStep, **kwargs):
 
 
 def main(argv):
-    umdp.headerumd()
+    umdpf.headerumd()
     umdfile = 'output.umd.dat'
     Nsteps = 1
     discrete = 0.01            #delta_r  = width of bins in histogram
