@@ -13,15 +13,10 @@ Created on Thu Dec  8 14:39:40 2022
 """
 
 import matplotlib.pyplot as plt
-
 import sys, getopt, os.path
-
 import numpy as np
-
-import umd_process as umdp
-
+import umd_processes_fast as umdpf
 from scipy.integrate import simps
-
 import pandas as pd
 
 
@@ -157,7 +152,7 @@ def autocor_int_eta(AllSnapshots, step_initial, T, volume, UMDname, lagn):
 
 def main(argv):
 
-    umdp.headerumd()
+    umdpf.headerumd()
 
     UMDname = ''
 
@@ -215,7 +210,7 @@ def main(argv):
 
         AllSnapshots = []
 
-        (AllSnapshots, TimeStep) = umdp.read_stresses_4visc(UMDname)
+        (AllSnapshots, TimeStep) = umdpf.read_stresses_4visc(UMDname)
 
         print('Len(allsnapshots),timestep : ', len(AllSnapshots), TimeStep)
 
