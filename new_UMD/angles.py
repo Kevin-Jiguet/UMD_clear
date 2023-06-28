@@ -3,12 +3,12 @@
 """
 Created on Thu Apr 20 10:04:14 2023
 
-@author: kevin Jiguet
+@author: k
 """
 
 import sys,getopt,os.path,itertools,math
 import crystallography as cr
-import umd_process as umdp
+import umd_processes_fast as umdpf
 
 
 def compute_angles(Bonds,MyCrystal,AllSnapshots,internatoms,externatoms,fa,TimeStep):
@@ -60,7 +60,7 @@ def compute_angles(Bonds,MyCrystal,AllSnapshots,internatoms,externatoms,fa,TimeS
                         valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
                         distIEi = valx + valy + valz               
         
-                        angle=math.acos((distIEi+distIEj-distEiEj)/(2*math.sqrt(distIEi*distIEj)))/math.pi*180
+                        angle=math.acos((distIEi+distIEj-distEiEj)/(2*math.sqrt(distIEi*distIEj)))
                         
                         line+="\t"+str(angle)+" ("+str(iexternAt)+"-"+str(internAt)+"-"+str(jexternAt)+")"
                         
@@ -148,7 +148,7 @@ def read_bonds_angles(BondFile,s,centralatoms,externatoms):
 
 
 def main(argv):
-    umdp.headerumd()
+    umdpf.headerumd()
     Nsteps = 1
     header = ''
     try:
@@ -180,7 +180,7 @@ def main(argv):
 
     MyCrystal = cr.Lattice()
     AllSnapshots = [cr.Lattice]
-    (MyCrystal,AllSnapshots,TimeStep)=umdp.read_xcart(UMDname)
+    (MyCrystal,AllSnapshots,TimeStep)=umdpf.read_values(UMDname,"xcart")
     
     inneratoms=[]
     outeratoms=[]
