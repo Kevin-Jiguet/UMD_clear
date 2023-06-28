@@ -7,7 +7,7 @@ import getopt
 import os
 import subprocess
 import matplotlib.pyplot as plt
-import umd_process as umdp
+import umd_processes_fast as umdpf
 
 
 def is_number(s):
@@ -64,7 +64,7 @@ def plot_function(name,ax,data,average,stdev):
 def main(argv):
     FileName = ''
     SkipSteps=0
-    umdp.headerumd()
+    umdpf.headerumd()
     try:
         opts, arg = getopt.getopt(argv,"hf:i:",["fFileName,iInitialStep"])
     except getopt.GetoptError:
