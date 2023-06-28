@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 ###
 ##AUTHORS: RAZVAN CARACAS, ANAIS KOBSCH, NATALIA SOLOMATOVA, XI ZHU
@@ -6,7 +5,7 @@
 
 import sys,getopt,os.path,math
 import crystallography as cr
-import umd_process as umdp
+import umd_processes_fast as umdpf
 
 def read_outcar(FileName,InitialStep):
     #read poscar file
@@ -22,7 +21,7 @@ def read_outcar(FileName,InitialStep):
     nf.close()
     atomictype = 0
     CurrentTime = 0.0
-    TimeStep = 0.0
+    #TimeStep = 0.0
     flagscalee = -1
     with open(FileName,'r') as ff:
         while True:
@@ -108,7 +107,7 @@ def read_outcar(FileName,InitialStep):
 
 
     ff.close()
-    umdp.print_header(FileName,MyCrystal)
+    umdpf.print_header(FileName,MyCrystal)
     with open(FileName,'r') as ff:
         while True:
             line = ff.readline()
@@ -221,7 +220,7 @@ def read_outcar(FileName,InitialStep):
                                             MyCrystal.atoms[jatom].xred[ii] = MyCrystal.atoms[jatom].xred[ii] + MyCrystal.gprimd[ii][jj]*MyCrystal.atoms[jatom].xcart[ii]
                                             while MyCrystal.atoms[jatom].xred[ii] >=1.0:
                                                 MyCrystal.atoms[jatom].xred[ii] = MyCrystal.atoms[jatom].xred[ii] - 1.0
-                                (CurrentTime,TimeStep) = umdp.print_snapshots(FileName,MyCrystal,TimeStep,(istep-InitialStep)*TimeStep,diffcoords)
+                                (CurrentTime,TimeStep) = umdpf.print_snapshots(FileName,MyCrystal,TimeStep,(istep-InitialStep)*TimeStep,diffcoords)
                 if (entry[0]=='kin.'):          #reading the temperature
                     if len(entry) == 7:
                         MyCrystal.temperature = float(entry[5])
@@ -264,7 +263,7 @@ def main(argv):
     CurrentTime = 0.0
     TimeStep = 0.0
     string = ''
-    umdp.headerumd()
+    umdpf.headerumd()
     try:
         opts, arg = getopt.getopt(argv,"hf:i:",["fOUTCARfile","iInitialStep"])
     except getopt.GetoptError:
@@ -292,3 +291,6 @@ def main(argv):
 
 if __name__ == "__main__":
    main(sys.argv[1:])
+
+
+
