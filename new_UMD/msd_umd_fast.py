@@ -174,8 +174,12 @@ def main(argv):
                 f = open(msdfile,'w')
                 f.write(headerstring)
                 string='time_(fs)\t'
-                for itypat in range(MyCrystal.ntypat):
-                    string +=  MyCrystal.elements[itypat] + '\t' + MyCrystal.elements[itypat] + ' (1)\t' + MyCrystal.elements[itypat] + '(2)\t'+ MyCrystal.elements[itypat] + '(3)\t'
+                if Axes!=None :
+                    for itypat in range(MyCrystal.ntypat):
+                        string +=  MyCrystal.elements[itypat] + '\t' + MyCrystal.elements[itypat] + ' (1)\t' + MyCrystal.elements[itypat] + '(2)\t'+ MyCrystal.elements[itypat] + '(3)\t'
+                else :
+                    for itypat in range(MyCrystal.ntypat):
+                        string += MyCrystal.elements[itypat] + '\t'
                 string = string + '\n'
                 f.write(string)
  #                   print(niter, hh, ballistic)
@@ -185,10 +189,14 @@ def main(argv):
                     instant = (float(ii)*TimeStep*vv)+ballistic
                     string = str(instant)
                     for jj in range(MyCrystal.ntypat):
+                        print(MyCrystal.ntypat)
                         string+='\t' + str(MSD[jj][0][ii]/(float(MyCrystal.types[jj])*float(weight)))
                         if Axes != None :
                             for kk in range(1,4):
+                                print(kk)
+                                print(str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight))))
                                 string += '\t' + str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight)))
+                    print(string)
                     string = string + '\n'
                     f.write(string)
                 print ('MSDs printed in file ',msdfile)
