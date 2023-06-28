@@ -5,12 +5,12 @@ Created on Tue Jun  6 11:00:43 2023
 
 @author: Kevin Jiguet-Covex
 """
-import umd_process as umdp
+import umd_processes_fast as umdpf
 import sys, getopt
 
 
 def main(argv):
-    umdp.headerumd()
+    umdpf.headerumd()
     UMDname = ''
     seq = 1
     try:
