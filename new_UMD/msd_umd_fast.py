@@ -71,7 +71,7 @@ def main(argv):
     umdpf.headerumd()
     start=time.time()
     umdfile=''
-    Auto = True
+    Auto = False
 #    Axes=[1,0,0,0,1,0,0,0,1]
     Axes = None
     try:
@@ -90,7 +90,7 @@ def main(argv):
             print ('VerticalJump = discretization for the length of the sampling window.')
             print ('Ballistic = estimation of the ballistic part of the trajectory. Default is 0. Typical values of 100 are sufficient.')
             print ('Mode = atoms or elements ; parameter to either print the msd of each individual atom (+ the mean msd of each element) or only the msd of the elements.')
-            print ('Axes = a list of float that describes the axes along which the msd should be calculated. If this argument is absent, the default will be the traditional cartesian coordinates, and the execution will be slightly faster. ')
+            print ('Axes = a list of float that describes the axes along which the msd should be calculated. If this argument is absent, the default will be the traditional cartesian coordinates, and the execution will be slightly faster.\n Use < -a Auto > to use the axes as defined by the UMD lattice.')
             sys.exit()
         elif opt in ("-f", "--fumdfile"):
             umdfile = str(arg)
@@ -110,21 +110,24 @@ def main(argv):
         elif opt in ("-m","--mMode"):
             x=str(arg)
         elif opt in ("-a","--aAxes"):
-            Axes = eval(arg)
+            if arg == "Auto":
+                Auto =True
+            else :
+                Axes = eval(arg)
             
-            l1 = math.sqrt(Axes[0]**2+Axes[1]**2+Axes[2]**2)
-            l2 = math.sqrt(Axes[3]**2+Axes[4]**2+Axes[5]**2)
-            l3 = math.sqrt(Axes[6]**2+Axes[7]**2+Axes[8]**2)
-            #Normalization        
-            Axes[0]/=l1 
-            Axes[1]/=l1 
-            Axes[2]/=l1 
-            Axes[3]/=l2 
-            Axes[4]/=l2 
-            Axes[5]/=l2 
-            Axes[6]/=l3 
-            Axes[7]/=l3
-            Axes[8]/=l3 
+                l1 = math.sqrt(Axes[0]**2+Axes[1]**2+Axes[2]**2)
+                l2 = math.sqrt(Axes[3]**2+Axes[4]**2+Axes[5]**2)
+                l3 = math.sqrt(Axes[6]**2+Axes[7]**2+Axes[8]**2)
+                #Normalization        
+                Axes[0]/=l1 
+                Axes[1]/=l1 
+                Axes[2]/=l1 
+                Axes[3]/=l2 
+                Axes[4]/=l2 
+                Axes[5]/=l2 
+                Axes[6]/=l3 
+                Axes[7]/=l3
+                Axes[8]/=l3 
 
             
     if (os.path.isfile(umdfile)):
