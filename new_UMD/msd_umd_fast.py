@@ -71,6 +71,7 @@ def main(argv):
     umdpf.headerumd()
     start=time.time()
     umdfile=''
+    Mode = "elements"
     Auto = False
 #    Axes=[1,0,0,0,1,0,0,0,1]
     Axes = None
@@ -108,7 +109,7 @@ def main(argv):
         elif opt in ("-b", "--bBallistic"):
             ballistic = int(arg)
         elif opt in ("-m","--mMode"):
-            x=str(arg)
+            Mode=str(arg)
         elif opt in ("-a","--aAxes"):
             if arg == "Auto":
                 Auto =True
@@ -146,17 +147,19 @@ def main(argv):
         
 
         print ('Number of atoms of each type is ',MyCrystal.types)
+
+        Instants = []
         with concurrent.futures.ProcessPoolExecutor() as executor:
             if Axes !=None :
                 msdAtomRed=partial(msdAtom_CAxes,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes)
             else :
                 msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic)
 
-            msdfile = umdfile[:-8] + '.msd_fasterA'
+            msdfile = umdfile[:-8] + '.msd_fast'
                               
             msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[ListAbsXcart[iatom] for iatom in range(MyCrystal.natom)]))
-            headerstring='MSD : -f '+umdfile+' -m '+ x +'-a '+str(Axes)+'\n'
-            if(x=="elements"):
+            headerstring='MSD : -f '+umdfile+' -m '+ Mode +'-a '+str(Axes)+'\n'
+            if(Mode=="elements"):
                 
                 if Axes != None :
                     msdfile+='.axes'
@@ -187,21 +190,18 @@ def main(argv):
  #                   print("weight=",weight*MyCrystal.natom)                    
                 for ii in range(len(MSD[0][0])):     
                     instant = (float(ii)*TimeStep*vv)+ballistic
+                    Instants.append(instant)
                     string = str(instant)
                     for jj in range(MyCrystal.ntypat):
-                        print(MyCrystal.ntypat)
                         string+='\t' + str(MSD[jj][0][ii]/(float(MyCrystal.types[jj])*float(weight)))
                         if Axes != None :
                             for kk in range(1,4):
-                                print(kk)
-                                print(str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight))))
                                 string += '\t' + str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight)))
-                    print(string)
                     string = string + '\n'
                     f.write(string)
                 print ('MSDs printed in file ',msdfile)
                 
-            elif(x=="atoms"):
+            elif(Mode=="atoms"):
                 
                 if Axes != None :
                     msdfile+=".axes"
@@ -238,6 +238,7 @@ def main(argv):
 
                 for ii in range(len(MSD[0][0])):     
                     instant = (float(ii)*TimeStep*vv)+ballistic
+                    Instants.append(instant)
                     string = str(instant)
                     for jj in range(MyCrystal.natom):
                         string+='\t' + str(MSD[jj][0][ii]/(float(weight)))
@@ -249,7 +250,7 @@ def main(argv):
 
 
                 print ('MSDs printed in file ',msdfile)
-   
+        return [msdfile,MSD,Instants,MyCrystal.elements]
          
     else:
         print ('umd file ',umdfile,'does not exist')
