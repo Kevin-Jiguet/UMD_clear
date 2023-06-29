@@ -3,7 +3,6 @@
 """
 Created on Fri Jun 16 12:22:44 2023
 
-@author: k
 """
 ###
 ##AUTHORS: KEVIN JIGUET
@@ -147,13 +146,13 @@ def Crystallization(File):#builds the Crystal
     return MyCrystal, TimeStep
 
 
-def read_values(UMDfile,key,mode="line",Nsteps=1,cutoff="no"):
+def read_values(UMDfile,key,mode="line",Nsteps=1,cutoff="all"):
     
     t=time.time()
     MyCrystal,TimeStep = Crystallization(UMDfile)
     OctIndexesRaw = Octets_from_File(UMDfile, 'atoms:', MyCrystal.natom)
     
-    if cutoff=="no":
+    if cutoff=="all":
         cutoff = len(OctIndexesRaw)-1
         
     OctIndexes=OctIndexesRaw[:cutoff+1]
