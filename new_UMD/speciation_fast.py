@@ -10,8 +10,6 @@ Created on Tue May 30 09:44:43 2023
 
 
 import sys,getopt,os.path,itertools
-import crystallography as cr
-import math
 import time
 from functools import partial
 import concurrent.futures
@@ -131,7 +129,7 @@ def main(argv):
     header = header + ' -r=' + str(rings)
 
     if not (os.path.isfile(BondFile)):
-        print ('the UMD files ',BondFile,' does not exist')            
+        print ('the file ',BondFile,' does not exist')            
         sys.exit()
 
 
@@ -166,7 +164,6 @@ def main(argv):
         print("ERROR : element ",Adjacent," not present in simulation")
         
     
-    
     clusteringRed=partial(clustering, CentMin=CentMin,CentMax=CentMax,OutMin=OutMin,OutMax=OutMax,r=rings)
        
     with concurrent.futures.ProcessPoolExecutor() as executor :
@@ -196,9 +193,9 @@ def main(argv):
 
                 
         #Creating the output files        
-    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
+    FileAll = BondFile[:-4] +'.r=' + str(rings) + '.populB.dat'
 #    print ('Population will be written in ',FileAll,' file')
-    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.stat.dat'
+    FileStat = BondFile[:-4] + '.r=' + str(rings) + '.statB.dat'
 #    print ('Statistics will be written in ',FileStat,' file')
     header+="\n"            
                 
