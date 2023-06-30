@@ -71,6 +71,8 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
             atom+=1
                 
     fullbond_lib.free_memory(Bonds)
+    del MSp
+    del BTp
     return BondsList        
 
 def main(argv):
