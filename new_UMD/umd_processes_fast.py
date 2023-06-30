@@ -3,13 +3,14 @@
 """
 Created on Fri Jun 16 12:22:44 2023
 
+@author: k
 """
 ###
 ##AUTHORS: KEVIN JIGUET
 ###
 
 
-import sys,getopt,os.path,itertools
+import sys, os.path
 import crystallography as cr
 from functools import partial
 import concurrent.futures
@@ -107,7 +108,7 @@ def Octets_from_File(File,key,nlines):#Returns the indexes of octets pertaining 
 def Crystallization(File):#builds the Crystal
     MyCrystal = cr.Lattice()
     ff=open(File,"r")
-    for _ in range(20):
+    while True:
         line = ff.readline()
         if not line: break
             #print(line,len(line))
@@ -117,31 +118,45 @@ def Crystallization(File):#builds the Crystal
             if entry[0] == 'natom':
                 MyCrystal.natom = int(entry[1])
                 MyCrystal.typat = [0 for _ in range(MyCrystal.natom)]
-            if entry[0] == 'ntypat':
+            elif entry[0] == 'ntypat':
                 MyCrystal.ntypat = int(entry[1])
                 MyCrystal.types = [0 for _ in range(MyCrystal.ntypat)]
                 MyCrystal.elements = ['X' for _ in range(MyCrystal.ntypat)]
                 MyCrystal.masses = [1.0 for _ in range(MyCrystal.ntypat)]
                 MyCrystal.zelec = [1.0 for _ in range(MyCrystal.ntypat)]
-            if entry[0] == 'types':
+            elif entry[0] == 'types':
                 for ii in range(MyCrystal.ntypat):
                     MyCrystal.types[ii]=int(entry[ii+1])
-            if entry[0] == 'elements':
+            elif entry[0] == 'elements':
                 for ii in range(MyCrystal.ntypat):
                     MyCrystal.elements[ii]=entry[ii+1]
-            if entry[0] == 'masses':
+            elif entry[0] == 'masses':
                 for ii in range(MyCrystal.ntypat):
                     MyCrystal.masses[ii]=float(entry[ii+1])
-            if entry[0] == 'Zelectrons':
+            elif entry[0] == 'Zelectrons':
                 for ii in range(MyCrystal.ntypat):
                     MyCrystal.zelec[ii]=float(entry[ii+1])
-            if entry[0] == 'typat':
+            elif entry[0] == 'typat':
                 for ii in range(MyCrystal.natom):
                     MyCrystal.typat[ii] = int(entry[ii+1])
-            if entry[0] == 'timestep':
+            elif entry[0] == 'timestep':
                 TimeStep = float(entry[1])
-            if entry[0] == 'acell':
+            elif entry[0] == 'acell':
                 MyCrystal.acell=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprim_a':
+                MyCrystal.rprim[0]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprim_b':
+                MyCrystal.rprim[1]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprim_c':
+                MyCrystal.rprim[2]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprimd_a':
+                MyCrystal.rprimd[0]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprimd_b':
+                MyCrystal.rprimd[1]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            elif entry[0] == 'rprimd_c':
+                MyCrystal.rprimd[2]=[float(entry[1]),float(entry[2]),float(entry[3])]
+            if entry[0] == 'atoms:':
+                break
     ff.close()
     return MyCrystal, TimeStep
 
@@ -302,3 +317,139 @@ def headerumd():
     print ('    UMD: An open source package for analyzing Molecular Dynamics simulations' )
     print ('    Journal of Visualized Experiments, in press/media prep (2020)' )
     print (' ')
+    
+def print_header(FileName,MyCrystal):
+    newfile = FileName + '.umd.dat'
+    nf = open(newfile,'a')
+    string = 'natom ' + str(MyCrystal.natom) + '\n'
+    nf.write(string)
+    string = 'ntypat ' + str(MyCrystal.ntypat) + '\n'
+    nf.write(string)
+    string = 'no.of.electrons ' + str(MyCrystal.noelectrons) + '\n'
+    nf.write(string)
+    string = 'types '
+    for ii in range(MyCrystal.ntypat):
+        string = string + str(MyCrystal.types[ii]) + ' '
+    string = string + '\n'
+    nf.write(string)
+    string = 'elements '
+    for ii in range(MyCrystal.ntypat):
+        string = string + str(MyCrystal.elements[ii]) + ' '
+    string = string + '\n'
+    nf.write(string)
+    string = 'masses '
+    for ii in range(MyCrystal.ntypat):
+        string = string + str(MyCrystal.masses[ii]) + ' '
+    string = string + '\n'
+    nf.write(string)
+    string = 'Zelectrons '
+    for ii in range(MyCrystal.ntypat):
+        string = string + str(MyCrystal.zelec[ii]) + ' '
+    string = string + '\n'
+    nf.write(string)
+    string = 'typat '
+    for ii in range(MyCrystal.natom):
+        string = string + str(MyCrystal.typat[ii]) + ' '
+    string = string + '\n\n'
+    nf.write(string)
+    string = 'lambda_ThermoInt' + ' ' +  str(MyCrystal.lambda_ThermoInt)
+    string = string + '\n\n'
+    nf.write(string)
+    nf.close()
+
+def print_snapshots(FileName,MyCrystal,TimeStep,CurrentTime,diffcoords):
+    newfile = FileName + '.umd.dat'
+    nf = open(newfile,'a')
+    string = 'timestep ' + str(TimeStep) + ' fs\n' + 'time ' + str(CurrentTime) + ' fs\n'
+    nf.write(string)
+    string = 'InternalEnergy ' + str(round(MyCrystal.internalenergy,6)) + ' eV\n'
+    nf.write(string)
+    string = 'ElectronicEntropy ' + str(round(MyCrystal.electronicentropy,6)) + ' eV\n'
+    nf.write(string)
+    string = 'KineticEnergyIons ' + str(round(MyCrystal.kineticenergy,6)) + ' eV\n'
+    nf.write(string)
+    string = 'EnergyWithDrift ' + str(round(MyCrystal.energywithdrift,6)) + ' eV\n'
+    nf.write(string)
+    string = 'Enthalpy ' + str(round(MyCrystal.enthalpy,6)) + ' eV\n'
+    nf.write(string)
+    string = 'Magnetization ' + str(round(MyCrystal.magnetization,6)) + ' Magneton-Bohr\n'
+    nf.write(string)
+    string = 'Temperature ' + str(round(MyCrystal.temperature,1)) + ' K\n'
+    nf.write(string)
+    string = 'Pressure ' + str(round(MyCrystal.pressure,4)) + ' GPa\n'
+    nf.write(string)
+    string = 'Density ' + str(round(MyCrystal.density,3)) + ' g.cm-3\n'
+    nf.write(string)
+    string = 'StressTensor '
+    for ii in range(6):
+        string = string + str(round(MyCrystal.stress[ii],4)) + ' '
+    string = string + ' GPa\n'
+    nf.write(string)
+#    string = 'acell ' + str(round(MyCrystal.acell[0],3)) + ' ' + str(round(MyCrystal.acell[1],3) + ' ' + str(round(MyCrystal.acell[2],3)) + ' A\n'
+    string = 'acell ' + str(MyCrystal.acell[0]) + ' ' + str(MyCrystal.acell[1]) + ' ' + str(MyCrystal.acell[2]) + ' A\n'
+    nf.write(string)
+    string = 'rprim_a ' + str(MyCrystal.rprimd[0][0]/MyCrystal.acell[0]) + '  ' +str(MyCrystal.rprimd[0][1]/MyCrystal.acell[0]) + '  ' +str(MyCrystal.rprimd[0][2]/MyCrystal.acell[0]) + '\n'
+    nf.write(string)
+    string = 'rprim_b ' + str(MyCrystal.rprimd[1][0]/MyCrystal.acell[1]) + '  ' +str(MyCrystal.rprimd[1][1]/MyCrystal.acell[1]) + '  ' +str(MyCrystal.rprimd[1][2]/MyCrystal.acell[1]) + '\n'
+    nf.write(string)
+    string = 'rprim_c ' + str(MyCrystal.rprimd[2][0]/MyCrystal.acell[2]) + '  ' +str(MyCrystal.rprimd[2][1]/MyCrystal.acell[2]) + '  ' +str(MyCrystal.rprimd[2][2]/MyCrystal.acell[2]) + '\n'
+    nf.write(string)
+    string = 'rprimd_a ' + str(MyCrystal.rprimd[0][0]) + '  ' +str(MyCrystal.rprimd[0][1]) + '  ' +str(MyCrystal.rprimd[0][2]) + ' A\n'
+    nf.write(string)
+    string = 'rprimd_b ' + str(MyCrystal.rprimd[1][0]) + '  ' +str(MyCrystal.rprimd[1][1]) + '  ' +str(MyCrystal.rprimd[1][2]) + ' A\n'
+    nf.write(string)
+    string = 'rprimd_c ' + str(MyCrystal.rprimd[2][0]) + '  ' +str(MyCrystal.rprimd[2][1]) + '  ' +str(MyCrystal.rprimd[2][2]) + ' A\n'
+    nf.write(string)
+    string = 'atoms: reduced*3 cartesian*3(A) abs.diff.*3(A) velocity*3(A/fs) force*3(eV/A) charge(no.elec) magnetization(magneton-Bohr) \n'
+    nf.write(string)
+    for iatom in range(MyCrystal.natom):
+        string = str(round(MyCrystal.atoms[iatom].xred[0],5)) + ' ' + str(round(MyCrystal.atoms[iatom].xred[1],5)) + ' ' + str(round(MyCrystal.atoms[iatom].xred[2],5)) + ' '
+        string = string + str(round(MyCrystal.atoms[iatom].xcart[0],5)) + ' ' + str(round(MyCrystal.atoms[iatom].xcart[1],5)) + ' ' + str(round(MyCrystal.atoms[iatom].xcart[2],5)) + ' '
+        string = string + str(round(diffcoords[iatom][0],5)) + ' ' + str(round(diffcoords[iatom][1],5)) + ' ' + str(round(diffcoords[iatom][2],5)) + ' '
+        string = string + str(round(MyCrystal.atoms[iatom].vels[0],5)) + ' ' + str(round(MyCrystal.atoms[iatom].vels[1],5)) + ' ' + str(round(MyCrystal.atoms[iatom].vels[2],5)) + ' '
+        string = string + str(round(MyCrystal.atoms[iatom].forces[0],5)) + ' ' + str(round(MyCrystal.atoms[iatom].forces[1],5)) + ' ' + str(round(MyCrystal.atoms[iatom].forces[2],5)) + ' '
+        string = string + str(MyCrystal.atoms[iatom].charge) + ' ' + str(MyCrystal.atoms[iatom].magnet) + '\n'
+        nf.write(string)
+    string='\n'
+    nf.write(string)
+    nf.close()
+    return(CurrentTime,TimeStep)
+
+def read_bigheader_umd(umdfile, short=0):
+    MyCrystal = cr.Lattice()
+    with open(umdfile,'r') as ff:
+        while True:
+            line = ff.readline()
+            if not line: break
+            #print(line,len(line))
+            if len(line) > 1:
+                line=line.strip()
+                entry=line.split()
+                if entry[0] == 'natom':
+                    MyCrystal.natom = int(entry[1])
+                    MyCrystal.typat = [0 for _ in range(MyCrystal.natom)]
+                if entry[0] == 'ntypat':
+                    MyCrystal.ntypat = int(entry[1])
+                    MyCrystal.types = [0 for _ in range(MyCrystal.ntypat)]
+                    MyCrystal.elements = ['X' for _ in range(MyCrystal.ntypat)]
+                    MyCrystal.masses = [1.0 for _ in range(MyCrystal.ntypat)]
+                    MyCrystal.zelec = [1.0 for _ in range(MyCrystal.ntypat)]
+                if entry[0] == 'types':
+                    for ii in range(MyCrystal.ntypat):
+                        MyCrystal.types[ii]=int(entry[ii+1])
+                if entry[0] == 'elements':
+                    for ii in range(MyCrystal.ntypat):
+                        MyCrystal.elements[ii]=entry[ii+1]
+                if entry[0] == 'masses':
+                    for ii in range(MyCrystal.ntypat):
+                        MyCrystal.masses[ii]=float(entry[ii+1])
+                if entry[0] == 'Zelectrons':
+                    for ii in range(MyCrystal.ntypat):
+                        MyCrystal.zelec[ii]=float(entry[ii+1])
+                if entry[0] == 'typat':
+                    for ii in range(MyCrystal.natom):
+                        MyCrystal.typat[ii] = int(entry[ii+1])
+                if entry[0] == 'timestep':
+                    TimeStep = float(entry[1])
+                    break
+    return(MyCrystal,TimeStep)
