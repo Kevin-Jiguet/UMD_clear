@@ -28,6 +28,9 @@ fullbond_lib = ctypes.cdll.LoadLibrary(join(path_new, 'c_bonds_fullD.so'))
 fullbond_lib.compute_fBonds.argtypes = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_double,ctypes.c_double,ctypes.c_double,ctypes.c_int]
 fullbond_lib.compute_fBonds.restype = ctypes.POINTER(ctypes.c_int)
 
+fullbond_lib.free_memory.argtypes = [ctypes.POINTER(ctypes.c_int)]
+fullbond_lib.free_memory.restypes = None
+
 def read_inputfile(InputFile,MyCrystal):#Creates a matrix from the .dat file containing the bond length for each pair of atom types
     BondTable = [[0.0 for _ in range(MyCrystal.ntypat)] for _ in range(MyCrystal.ntypat)]
     with open(InputFile) as ff:
@@ -67,7 +70,7 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
         else : 
             atom+=1
                 
-    
+    fullbond_lib.free_memory(Bonds)
     return BondsList        
 
 def main(argv):
