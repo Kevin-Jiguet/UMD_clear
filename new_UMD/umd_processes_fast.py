@@ -227,12 +227,21 @@ def read_bonds(BondFile,centEl,adjEl):
     
     ff=open(BondFile,"r")
     natom = int(ff.readline().strip().split()[1])
-    ff.readline()
-    typesStr = ff.readline().strip().split()[1:]
-    types = [0]+[int(x) for x in typesStr]
-    elements = [""]+ff.readline().strip().split()[1:]
+    
+    while True :
+        
+        line = ff.readline().strip().split()
+        if not line : break
+        if len(line)>0:
+            if line[0] == "types":
+                types = [0]+[int(x) for x in line[1:]]
+            elif line[0] == "elements":    
+                elements = [""]+line[1:]
+            elif line[0] == "atoms":
+                break
+            
     ff.close()
-    print(elements)
+    print(elements[1:])
     
     try:
         indCent = elements.index(centEl)
