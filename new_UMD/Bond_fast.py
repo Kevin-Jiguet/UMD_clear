@@ -31,6 +31,9 @@ fullbond_lib.compute_fBonds.restype = ctypes.POINTER(ctypes.c_int)
 fullbond_lib.free_memory.argtypes = [ctypes.POINTER(ctypes.c_int)]
 fullbond_lib.free_memory.restypes = None
 
+fullbond_lib.compute_fBonds_specific.argtypes = [ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_double,ctypes.c_double,ctypes.c_double,ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
+fullbond_lib.compute_fBonds_specific.restype = ctypes.POINTER(ctypes.c_int)
+
 def read_inputfile(InputFile,MyCrystal):#Creates a matrix from the .dat file containing the bond length for each pair of atom types
     BondTable = [[0.0 for _ in range(MyCrystal.ntypat)] for _ in range(MyCrystal.ntypat)]
     with open(InputFile) as ff:
@@ -46,7 +49,7 @@ def read_inputfile(InputFile,MyCrystal):#Creates a matrix from the .dat file con
                                 BondTable[jj][ii]=float(entry[2])*float(entry[2])
     return BondTable
 
-def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numCells,acell):
+def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numCells,acell,specifics):
     
     print("calculating bonds in snapshot n. "+str(step))
     #Preparing data to be used by the C function
@@ -58,7 +61,14 @@ def WriteBonding_C_full(MySnapshotL,step,MyCrystal,BondTable,timestep,natom,numC
         
     CTp = (ctypes.c_int * natom)(*CrystalTypes)
 
-    Bonds = fullbond_lib.compute_fBonds(MSp,BTp,CTp,natom,MyCrystal.ntypat,acell[0],acell[1],acell[2],numCells)
+    if specifics ==None :
+        
+        Bonds = fullbond_lib.compute_fBonds(MSp,BTp,CTp,natom,MyCrystal.ntypat,acell[0],acell[1],acell[2],numCells)
+    
+    else :
+        SPp = (ctypes.c_double * 6)(*specifics)
+        Bonds = fullbond_lib.compute_fBonds_specific(MSp,BTp,CTp,natom,MyCrystal.ntypat,acell[0],acell[1],acell[2],numCells,SPp)
+    
     LBonds = Bonds[0]
 
     #Converting bond profile from C to python list
@@ -81,10 +91,11 @@ def main(argv):
     Nsteps = 1
     InputFile = ''
     header = ''
-    numCells=5
+    numCells=None
     maxlength=None
+    specifics = None
     try:
-        opts, arg = getopt.getopt(argv,"hf:s:l:i:n:",["fUMDfile","sSampling_Frequency","lMaxLength","iInputFile","nNumCells"])
+        opts, arg = getopt.getopt(argv,"hf:s:l:i:n:p:",["fUMDfile","sSampling_Frequency","lMaxLength","iInputFile","nNumCells","pSpecifics"])
     except getopt.GetoptError:
         print ('Bond_par.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -i <InputFile>')
         sys.exit(2)
@@ -114,6 +125,8 @@ def main(argv):
         elif opt in ("-n", "--nNumCells"):
             numCells = int(arg)
             header = header + ' -n=' + arg
+        elif opt in ("-p","--pSpecifics"):
+            specifics = eval(arg)
 
     if not (os.path.isfile(UMDname)):
         print ('the UMD files ',UMDname,' does not exist')            
@@ -136,30 +149,32 @@ def main(argv):
 
     M=math.sqrt(max([max(Bondlengths) for Bondlengths in BondTable]))#maximal length of any bond
 
+    if numCells == None :
+        numCells = int(min(acell)/M)
+        print("Number of cells automatically fixed to "+str(numCells))
+        
     if acell[0]/numCells<M or acell[1]/numCells<M or acell[2]/numCells<M:
-        print('WARNING : one or more dimension(s) of the sub-cells smaller than the greatest bond length.')
-            
+        print('WARNING : one or more dimension(s) of the sub-cells smaller than the greatest bond length.')            
 
     natom=MyCrystal.natom
-    FileAll=UMDname[:-8]+'.bondingB.dat'
+    FileAll=UMDname[:-8]+'.bonding_specific.dat'
     print ('Bonds will be written in <',FileAll,'> file')
-    fa=open(FileAll,'w')
-    ff=open(UMDname,'r')
     
-    for i in range(20):    
-        line=ff.readline()
-        fa.write(line)
-        
-    ff.close()
+    umdpf.copyhead(FileAll,UMDname)        
+
     Lines=[]
-    WriteBondingRed=partial(WriteBonding_C_full,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells,acell=acell)
+    WriteBondingRed=partial(WriteBonding_C_full,MyCrystal=MyCrystal,BondTable=BondTable,timestep=TimeStep,natom=natom,numCells=numCells,acell=acell,specifics = specifics)
         
+    Lines = []
+    
     with concurrent.futures.ProcessPoolExecutor() as executor :
         Lines=list(executor.map(WriteBondingRed,AllSnapshotsL,[step*Nsteps for step in range(len(AllSnapshotsL))]))#Calculates the bond profile for each snapshot
 
 
     step=0
     print("Writing...")
+    fa=open(FileAll,'a')
+
     for lines in Lines :                
         header = 'time '+str(step*TimeStep)+' fs\nstep '+str(step)+'\n'
         fa.write(header)
