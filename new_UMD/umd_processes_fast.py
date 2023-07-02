@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jun 16 12:22:44 2023
-
-@author: k
 """
 ###
 ##AUTHORS: KEVIN JIGUET
@@ -462,3 +460,24 @@ def read_bigheader_umd(umdfile, short=0):
                     TimeStep = float(entry[1])
                     break
     return(MyCrystal,TimeStep)
+
+def copyhead(Target,File):
+    
+    ff = open(File,"r")
+    fa = open(Target,"w")
+    
+    while True : 
+        line = ff.readline()
+        if not line :
+            ff.close()
+            fa.close()
+            break
+        l = line.strip().split()
+        
+        if len(l)>0 :
+            if l[0] == "atoms:":
+                ff.close()
+                fa.close()
+                break                
+        
+        fa.write(line)
