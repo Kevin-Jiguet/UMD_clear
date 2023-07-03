@@ -3,6 +3,7 @@
 """
 Created on Tue May 30 09:44:43 2023
 """
+#!/usr/bin/env python3
 ###
 ##AUTHORS: KEVIN JIGUET
 ###
@@ -43,9 +44,9 @@ def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the ind
         return population_parallel
     
 
-def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,OutMax,r):
+def clustering(SnapshotBonds,SnapshotBondIndexes,step,CentMin,CentMax,OutMin,OutMax,r,Nsteps):
     
-    print("calculating species from snapshot n. "+str(step))
+    print("calculating species from snapshot n. "+str(step*Nsteps))
     M=SnapshotBondIndexes[-1]#maximum number of bound atoms for any atoms
     #Preparing data for the C script        
     SBp = (ctypes.c_int * len(SnapshotBonds))(*SnapshotBonds)
@@ -131,7 +132,8 @@ def main(argv):
         print ('the file ',BondFile,' does not exist')            
         sys.exit()
 
-    CentMin,CentMax,OutMin,OutMax,MyCrystal,Bonds,BondsIndexes,TimeStep = umdpf.read_bonds(BondFile,Central,Adjacent,mode='line',Nsteps=Nsteps)
+
+    CentMin,CentMax,OutMin,OutMax,MyCrystal,Bonds,BondsIndexes,TimeStep = umdpf.read_bonds(BondFile,Central,Adjacent,Nsteps=Nsteps)
 
     ClusterAtoms=[Central,Adjacent]
     print(ClusterAtoms)
@@ -162,8 +164,12 @@ def main(argv):
         print("ERROR : element ",Adjacent," not present in simulation")
         
     
-    clusteringRed=partial(clustering, CentMin=CentMin,CentMax=CentMax,OutMin=OutMin,OutMax=OutMax,r=rings)
+    clusteringRed=partial(clustering, CentMin=CentMin,CentMax=CentMax,OutMin=OutMin,OutMax=OutMax,r=rings,Nsteps=Nsteps)
        
+    clusters_linear =[]
+    for i in range(len(Bonds)):
+        clusters_linear.append(clusteringRed(Bonds[i],BondsIndexes[i],i))
+    
     with concurrent.futures.ProcessPoolExecutor() as executor :
         clusters=list(executor.map(clusteringRed,Bonds,BondsIndexes, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
     
@@ -241,7 +247,7 @@ def main(argv):
                 #print(dicoTimes[ii])
             for clust in dicoTimes[ii]:
                 if clust[3]>minlife :
-                    newstring=clust[1]+"\t"+str(ii)+"\t"+str(clust[2])+"\t"+str(clust[3])+"\t"+clust[0]+"\n"
+                    newstring=clust[1]+"\t"+str(ii*Nsteps)+"\t"+str(clust[2]*Nsteps)+"\t"+str(clust[3])+"\t"+clust[0]+"\n"
                     fa.write(newstring)
     fa.close()
         
