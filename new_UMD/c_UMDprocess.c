@@ -45,14 +45,24 @@ double* read_umd_values(char *MySnapshot, int nAtoms, int X){//reads some specif
 	int exp = 0;
 	double* Values;
 	int lineIndex=0;//index on the line of the number we are looking at
-	Values = calloc(3*nAtoms,sizeof(double));
+	if(X!=-1){
+		Values = calloc(3*nAtoms,sizeof(double));
+		 }
+	else{
+		Values = calloc(12*nAtoms,sizeof(double));
+	    }
 	len = strlen(MySnapshot);
 	for(int i=0 ; i<len ; i++){
 
 		if(MySnapshot[i]==' '){	
 			if(flagcoord){
 				if(atom<nAtoms){
-					Values[3*atom+lineIndex-X]=number*sign*pow(10,exp*signexp);
+					if(X!=-1){
+						Values[3*atom+lineIndex-X]=number*sign*pow(10,exp*signexp);
+					}
+					else if(lineIndex<12){
+						Values[12*atom+lineIndex]=number*sign*pow(10,exp*signexp);
+					}
 				}
 				flagcoord=0;
 			}
@@ -72,7 +82,7 @@ double* read_umd_values(char *MySnapshot, int nAtoms, int X){//reads some specif
 				sign = -1;
 			}
 		}
-		else if(lineIndex==X||lineIndex==X+1||lineIndex==X+2){//If we are on the vels coordinates
+		else if((lineIndex==X||lineIndex==X+1||lineIndex==X+2)||(X==-1 && lineIndex<12)){//If we are on the right coordinates
 			flagcoord = 1;
 			if(isdigit(MySnapshot[i])){
 				if(flagexp){
