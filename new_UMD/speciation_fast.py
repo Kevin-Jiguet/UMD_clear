@@ -166,10 +166,6 @@ def main(argv):
     
     clusteringRed=partial(clustering, CentMin=CentMin,CentMax=CentMax,OutMin=OutMin,OutMax=OutMax,r=rings,Nsteps=Nsteps)
        
-    clusters_linear =[]
-    for i in range(len(Bonds)):
-        clusters_linear.append(clusteringRed(Bonds[i],BondsIndexes[i],i))
-    
     with concurrent.futures.ProcessPoolExecutor() as executor :
         clusters=list(executor.map(clusteringRed,Bonds,BondsIndexes, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
     
