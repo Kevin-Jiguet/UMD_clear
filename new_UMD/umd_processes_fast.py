@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jun 16 12:22:44 2023
+
+@author: k
 """
 ###
 ##AUTHORS: KEVIN JIGUET
@@ -42,21 +44,26 @@ def read_snapshot_values_C(octettop,octetbot,step,natom,File,X,mode):#Extracts t
     ff.close()
     snapPointer = ctypes.c_char_p(snapshot.encode('utf-8'))
     
-    
     CList=read_lib.read_umd_values(snapPointer,natom,X)
     SnapshotValues=[]
-    
+    if X==-1:
+        k=12
+    else :
+        k=3
     #Converts the C data into a python list
     if mode=="lists":#Returns a list of 3-elements list (x,y,z) for each atom
         for i in range(natom):
-            SnapshotValues.append([round(CList[i],5),round(CList[i+1],5),round(CList[i+2],5)])
+            List=[]
+            for j in range(k):
+                List.append(round(CList[k*i+j],5))
+            SnapshotValues.append(List)
     elif mode=="line":#Returns a unique list of values for all the atoms, atom after atom
-        for i in range(3*natom):
+        for i in range(k*natom):
             SnapshotValues.append(round(CList[i],5))
     elif mode=="chunks":#Returns a unique list of values for all the atoms, axis after axis
-        for k in range(3):
+        for j in range(k):
             for i in range(natom):
-                SnapshotValues.append(round(CList[3*i+k],5))
+                SnapshotValues.append(round(CList[k*i+j],5))
     
     read_lib.free_memory(CList)
     
@@ -188,6 +195,8 @@ def read_values(UMDfile,key,mode="line",Nsteps=1,cutoff="all"):
     elif key == "velocity":
         X=9
         print('Extracting the velocities from the file ',UMDfile)
+    elif key == "everything":
+        X=-1
 
     else :
         print("Parameter < ",key," > not recognized")
