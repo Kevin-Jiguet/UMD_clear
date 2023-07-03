@@ -6,7 +6,7 @@
 
 import sys,getopt,os
 import crystallography as cr
-import umd_process as umdp
+import umd_processes_fast as umdpf
 
 def print_xyz(MyCrystal,AllSnapshots,UMDname,firststep,iterstep):
     xyzfile = UMDname[:-7] + 'xyz'
@@ -15,7 +15,7 @@ def print_xyz(MyCrystal,AllSnapshots,UMDname,firststep,iterstep):
         string = str(MyCrystal.natom) + '\n' + UMDname +'\n'
         ff.write(string)
         for iatom in range(MyCrystal.natom):
-            string = MyCrystal.elements[MyCrystal.typat[iatom]] + ' ' + str(AllSnapshots[istep].atoms[iatom].xcart[0]) + ' ' + str(AllSnapshots[istep].atoms[iatom].xcart[1]) + ' ' + str(AllSnapshots[istep].atoms[iatom].xcart[2]) +'\n'
+            string = MyCrystal.elements[MyCrystal.typat[iatom]] + ' ' + str(AllSnapshots[istep][3*iatom]) + ' ' + str(AllSnapshots[istep][3*iatom+1]) + ' ' + str(AllSnapshots[istep][3*iatom+2]) +'\n'
             ff.write(string)
     ff.close()
 
@@ -24,7 +24,7 @@ def main(argv):
     firststep = 0
     UMDname = 'output.umd.dat'
     UMDname = ''
-    umdp.headerumd()
+    umdpf.headerumd()
     try:
         opts, arg = getopt.getopt(argv,"hf:i:s:")
     except getopt.GetoptError:
@@ -47,7 +47,7 @@ def main(argv):
         print('The XYZ file contains every ',iterstep,' timesteps')
         MyCrystal = cr.Lattice()
         AllSnapshots = [cr.Lattice]
-        (MyCrystal,AllSnapshots,TimeStep)=umdp.readumd(UMDname)
+        (MyCrystal,AllSnapshots,TimeStep,length)=umdpf.read_values(UMDname,"xcart")
         print_xyz(MyCrystal,AllSnapshots,UMDname,firststep,iterstep)
     else:
         print ('the umdfile ',UMDname,' does not exist')
