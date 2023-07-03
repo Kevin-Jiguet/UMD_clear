@@ -131,8 +131,7 @@ def main(argv):
         print ('the file ',BondFile,' does not exist')            
         sys.exit()
 
-
-    CentMin,CentMax,OutMin,OutMax,MyCrystal,Bonds,BondsIndexes,TimeStep = umdpf.read_bonds(BondFile,Central,Adjacent)
+    CentMin,CentMax,OutMin,OutMax,MyCrystal,Bonds,BondsIndexes,TimeStep = umdpf.read_bonds(BondFile,Central,Adjacent,mode='line',Nsteps=Nsteps)
 
     ClusterAtoms=[Central,Adjacent]
     print(ClusterAtoms)
