@@ -230,7 +230,7 @@ def data_type(SnapshotsValuesList,natom,mode="line",datatype="list"):
     
     return SnapshotsValues
 
-def read_bonds(BondFile,centEl,adjEl):
+def read_bonds(BondFile,centEl,adjEl,Nsteps=1):
     
     ff=open(BondFile,"r")
     natom = int(ff.readline().strip().split()[1])
@@ -270,13 +270,16 @@ def read_bonds(BondFile,centEl,adjEl):
     MyCrystal,TimeStep = Crystallization(BondFile)
     OctIndexes = Octets_from_File(BondFile,"step",natom)
 
+    OctTop = [OctIndexes[i*Nsteps] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates the beginning of each relevant snapshot
+    OctBot = [OctIndexes[i*Nsteps+1] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates it's end
+
         
     print("Extracting bonds from file ",BondFile)
     
     bondsRed = partial(read_snapshotbonds_C,CentMin=CentMin, CentMax=CentMax, OutMin=AdjMin, OutMax=AdjMax, File=BondFile)
     
     with concurrent.futures.ProcessPoolExecutor() as executor :
-        Data = list(executor.map(bondsRed,OctIndexes[:-1],OctIndexes[1:]))
+        Data = list(executor.map(bondsRed,OctTop,OctBot))
     Bonds = [D[0] for D in Data]
     BondsIndexes = [D[1] for D in Data]
     
