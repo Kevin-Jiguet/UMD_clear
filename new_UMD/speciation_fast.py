@@ -3,7 +3,6 @@
 """
 Created on Tue May 30 09:44:43 2023
 """
-#!/usr/bin/env python3
 ###
 ##AUTHORS: KEVIN JIGUET
 ###
