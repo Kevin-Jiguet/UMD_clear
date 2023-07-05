@@ -13,7 +13,7 @@ To get the shared library :
       
       gcc -fPIC -c c_file.c -o c_file.o
         Then
-      gcc -shared -o c_file.so c-file.o
+      gcc -shared -o c_file.so c_file.o
 
 
 
