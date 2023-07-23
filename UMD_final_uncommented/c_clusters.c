@@ -23,6 +23,37 @@ int min(int a,int b){//returns the minimum of 2 numbers, except if one of them i
 
 }	
 
+
+void reinit(int *Tab,int *Indexes,int n){
+	int imax=0;
+	int imin=0;
+	for(int el = 0 ; el<n ; el++){
+		imin = Indexes[2*el];
+		imax = Indexes[2*el+1];
+		for(int i = imin ; i<imax+1 ; i++){
+			Tab[i] = i;
+		}	
+	}
+}
+
+bool is_in(int atom,int *Indexes, int n){
+	bool result = false;
+	for(int i=0 ; i<n ; i++){
+		if((atom>=Indexes[2*i] && atom<=Indexes[2*i+1])){
+			result = true;
+		}
+	}
+	return result;
+}
+
+int num_atoms(int* Indexes, int n){
+	int num = 0;
+	for(int i=0 ; i<n ; i++){
+		num = num + Indexes[2*i+1]-Indexes[2*i] + 1;
+	}
+	return num;
+}
+
 double min3(double a, double b, double c){//The minimum between 3 numbers.
 
 	double minimum = a;
@@ -35,7 +66,7 @@ double min3(double a, double b, double c){//The minimum between 3 numbers.
 }
 
 
-double* angles(int *polyhedras, int nPol, int M, double *MySnapshot, int CentMin, int CentMax, int OutMin, int OutMax, double acell0, double acell1, double acell2){
+double* angles(int *polyhedras, int nPol, int M, double *MySnapshot, int *CentIndexes, int nCent, int *OutIndexes, int nOut, double acell0, double acell1, double acell2){
 	double* AnglesList = NULL;
 	int* OutList = NULL;
 	double* CoordList = NULL;
@@ -49,10 +80,14 @@ double* angles(int *polyhedras, int nPol, int M, double *MySnapshot, int CentMin
 
 	CoordList = calloc(3*M,sizeof(double));
 	OutList = calloc(M,sizeof(int));
-	AnglesList = calloc(((OutMax-OutMin+1)*(OutMax-OutMin)/2+1+CentMax-CentMin+1),sizeof(double));
+
+	int numCent = num_atoms(CentIndexes,nCent);
+	int numOut = num_atoms(OutIndexes,nOut);
+
+	AnglesList = calloc(((M+1)*M/2*numCent+numCent),sizeof(double));
 
 	if(CoordList == NULL || OutList == NULL || AnglesList == NULL){
-		printf("Memory Allocation failure for CoordList, OutList or AnglesList in function 'angles'");
+		printf("Memory Allocation failure for CoordList (length %d), OutList (length %d) or AnglesList (length %d) in function 'angles'",3*M,M,(M+1)*M/2*numCent+numCent);
 		return EXIT_FAILURE;
 	}
 	AnglesList[0]=1;
@@ -147,103 +182,56 @@ double* angles(int *polyhedras, int nPol, int M, double *MySnapshot, int CentMin
 	return AnglesList;
 } 
 
-int atom_to_index(int atom,int CentMin,int CentMax,int OutMin,int OutMax){
+int atom_to_index(int atom,int *CentIndexes, int *OutIndexes, int nCent, int nOut){
 
 	int place;
-	if((CentMax-OutMax)*(CentMin-OutMin) > 0){
-		if(CentMax<OutMax){
-			if(atom<=CentMax){
-				place = atom - CentMin;
-			}
-			else{
-				place = atom - OutMin + CentMax - CentMin + 1;
-			}
-		}	
-		else if (CentMax>OutMax){
-			if(atom<=OutMax){
-				place = atom - OutMin;
-			}
-			else{
-				place = atom - CentMin + OutMax - OutMin + 1;
-			}	
-		}
-	}
-	else{
-		place = atom - min(OutMin,CentMin);
-	}
-//	printf("place of %d = %d ; CM = %d ; Cm = %d ; OM = %d ; Om = %d",atom,place,CentMax,CentMin,OutMax,OutMin);
+
+
+
 	return place;
 }
 
-void reinitAts(int *CentAts, int CentMin, int CentMax, int * OutAts, int OutMin, int OutMax){
-	for(int i=0 ; i<CentMax-CentMin+1 ; i++){
-		CentAts[i] = CentMin + i;
-	}
-
-	for(int i=0 ; i<OutMax-OutMin+1 ; i++){
-		OutAts[i] = OutMin + i;
-	}
-}
 
 
-void reinit(int *AllAts,int CentMin, int CentMax,int OutMin,int OutMax,int imax){
+void clusteringall(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int atom){
 
+	int at;
 
-	for(int i = 0 ; i<imax ; i++){
-		if((CentMax >= i && CentMin <=i)||(OutMax >= i && OutMin <= i)){
-			AllAts[i] = i;
-		} 
-		else{
-			AllAts[i]=-1;
-		}
-	}
-}
-
-
-void clusteringall(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *AllAtoms, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int atom){
-
-	int indiceAt, at, indiceCoord;
-	indiceAt = atom_to_index(atom,CentMin,CentMax,OutMin,OutMax);
-	for(int i = indBonds[indiceAt]; i<indBonds[indiceAt+1]; i++){
+	for(int i = indBonds[atom]; i<indBonds[atom+1]; i++){
 		at = SnapshotBonds[i];
-		
 		if(AllAtoms[at]!=-1){
 			AllAtoms[at]=-1;
 			neighbors[neighbors[0]]=at;
 			neighbors[0]++;
-			clusteringall(neighbors,SnapshotBonds,indBonds,AllAtoms,CentMin,CentMax,OutMin,OutMax,at);
+			clusteringall(neighbors,SnapshotBonds,indBonds,AllAtoms,at);
 		}
 	}
 }
 
-void clusteringrec(int *neighbors,const int *SnapshotBonds, const int *indBonds,int *CentAts, const int CentMin, const int CentMax, int *OutAts, const int OutMin, const int OutMax, const int atom, const int r){
+void clusteringrec(int *neighbors,const int *SnapshotBonds, const int *indBonds, int *OutAts, int *OutIndexes, const int nOut, const int atom, const int r){
 
+	int at=0;
 	if(r>0){
-
-		int indiceAt, at, indiceCoord;
-		indiceAt = atom_to_index(atom,CentMin,CentMax,OutMin,OutMax);
-
 //		printf("\n The atom %d has %d links ; the outer are : \n",atom,indBonds[indiceAt+1]-indBonds[indiceAt]);
 		
 		for(int x=0 ; x<r ; x++){printf("\t");}
-		for(int i = indBonds[indiceAt]; i<indBonds[indiceAt+1]; i++){
+		for(int i = indBonds[atom]; i<indBonds[atom+1]; i++){
 			at = SnapshotBonds[i];
-			if(at<=OutMax && at>=OutMin){
+			if(is_in(at,OutIndexes,nOut)){
 //				printf("%d (root %d) ",at,atom);
-				indiceCoord = at - OutMin ;
-				if(OutAts[indiceCoord]!=-1){
-					OutAts[indiceCoord]=-1;
+				if(OutAts[at]!=-1){
+					OutAts[at]=-1;
 					neighbors[neighbors[0]]=at;
 					neighbors[0]++;
 				}
-				clusteringrec(neighbors,SnapshotBonds,indBonds,CentAts,CentMin,CentMax,OutAts,OutMin,OutMax,at,r-1);
+				clusteringrec(neighbors,SnapshotBonds,indBonds,OutAts,OutIndexes,nOut,at,r-1);
 				
 			}
 		}
 	}
 }
 
-int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int nAts, const int CentMin, const int CentMax, const int OutMin, const int OutMax, const int M, const int r){
+int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int natom, const int nAts, int *CentIndexes, int *OutIndexes, int nCent, int nOut, const int M, const int r){
 	
 	int *AllAts = NULL;
 	int *neighbors = NULL;
@@ -256,42 +244,49 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int nAt
 	int atom;
 	int len;
 	int imax;
+	int prev_index=0;
 
-	int meanClustSize = indBonds[nAts]/nAts;
+	int numCent = num_atoms(CentIndexes,nCent);
+	int numOut = num_atoms(OutIndexes,nCent);
+
+	int meanClustSize = indBonds[nAts]/(nAts);
 
 
 	if(r>0){
-		maxClustSize = min(pow(M,r)+1,OutMax-OutMin+2);
+		maxClustSize = min(pow(M,r)+1,numOut+2);
 		len = indBonds[nAts]+2*nAts+1 ;
-		CentAts = calloc(CentMax-CentMin+1,sizeof(int));
-		OutAts = calloc(OutMax-OutMin+1,sizeof(int));
+		CentAts = calloc(natom,sizeof(int));
+		OutAts = calloc(natom,sizeof(int));
+	
 
 		if (CentAts == NULL||OutAts == NULL)
 		{
-		    printf("Memory Allocation failure for CentAts (length %d) or Outats (length %d)\n,",CentMax-CentMin+1,OutMax-OutMin+1);
+		    printf("Memory Allocation failure for CentAts (length %d) or Outats (length %d)\n,",natom,natom);
 		    return EXIT_FAILURE;
 		}
-		reinitAts(CentAts,CentMin,CentMax,OutAts,OutMin,OutMax);
+
+		for(int i=0 ; i<natom ; i++){
+			CentAts[i]=-1;
+			OutAts[i]=-1;
+		}
+
+		reinit(CentAts,CentIndexes,nCent);
+		reinit(OutAts,OutIndexes,nOut);
 	}	
 	else{
-		len = 2*nAts+1;					
+		len = 2*nAts+2;					
 		
-		if(CentMax>OutMax){
-			imax = CentMax;
-		}
-		else{
-			imax = OutMax;
-		}
-	
-		AllAts = calloc(imax,sizeof(int));
+		AllAts = calloc(natom,sizeof(int));
 		if (AllAts == NULL)
 		{
 		    printf("Memory Allocation failure for AllAts : len is %d\n",len);
 		    return EXIT_FAILURE;
 		}
-		reinit(AllAts,CentMin,CentMax,OutMin,OutMax,imax);	
-
-
+		for(int i=0 ; i<natom ; i++){
+			AllAts[i]=-1;
+		}
+		reinit(AllAts,CentIndexes,nCent);
+		reinit(AllAts,OutIndexes,nOut);
 	}
 
 	neighbors = calloc(len,sizeof(int));
@@ -314,25 +309,34 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int nAt
 //Neighbors computation
 
 	if(r>0){
-		while(index<CentMax-CentMin+1){
+		while(index<natom){
 			if(CentAts[index] != -1){
 				atom=CentAts[index];
 				CentAts[index]=-1;
 				neighbors[neighbors[0]]=atom;
 				neighbors[0]++;
-				clusteringrec(neighbors,SnapshotBonds,indBonds,CentAts,CentMin,CentMax,OutAts,OutMin,OutMax,atom,r);
+				prev_index = neighbors[0];
+				clusteringrec(neighbors,SnapshotBonds,indBonds,OutAts,OutIndexes,nOut,atom,r);
+				if(neighbors[0]==prev_index){
+					neighbors[0]--;
+					neighbors[neighbors[0]]=-1;
+				}
+				else{
+					neighbors[0]++;
+				}
+
 			}		
-			neighbors[0]++;
+
+
 			index++;
-			reinitAts(CentAts,CentMin,CentMax,OutAts,OutMin,OutMax);	
+			reinit(OutAts,OutIndexes,nOut);
 			if(neighbors[0]>len-2*maxClustSize){
 //				printf("about to reallocate ! %d to %d... ",len,len+2*maxClustSize+1);
 				
 				int *neighborstemp = (int *)realloc(neighbors,(len+2*maxClustSize+1)*sizeof(int));
-				if(neighborstemp == NULL){
-					printf("Memory allocation failure for neighbors \n");
-					return EXIT_FAILURE;
-				}
+
+				if(neighborstemp == NULL){printf("Memory allocation failure for neighbors \n");return EXIT_FAILURE;}
+
 				neighbors = neighborstemp;
 				len = len + 2*maxClustSize +1;
 				for(int k=neighbors[0] ; k<len ; k++){
@@ -340,15 +344,21 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int nAt
 				}													
 			}
 		}
+	free(OutAts);
+	free(CentAts);
+	while(neighbors[neighbors[0]]==-1){
+		neighbors[0]--;
+	}
+	return neighbors;
 	}
 	else{	
-		while(index<imax){
+		while(index<natom){
 			if(AllAts[index] != -1){
 				atom=AllAts[index];
 				AllAts[index]=-1;
 				neighbors[neighbors[0]]=atom;
 				neighbors[0]++;
-				clusteringall(neighbors,SnapshotBonds,indBonds,AllAts,CentMin,CentMax,OutMin,OutMax,atom);
+				clusteringall(neighbors,SnapshotBonds,indBonds,AllAts,atom);
 				neighbors[0]++;
 			}					
 			index++;
@@ -356,61 +366,10 @@ int* fullclustering(const int *SnapshotBonds, const int *indBonds, const int nAt
 		while(neighbors[neighbors[0]]==-1){
 			neighbors[0]--;
 		}
-
-		neighbors[0]++;
 		
 		free(AllAts);
 		free(OutAts);
 		free(CentAts);
-		return neighbors ;
+		return neighbors;
 	}
-	
-	Neighbors = calloc(neighbors[0]+2,sizeof(int));
-	for(int i= 0 ; i<neighbors[0]+2 ; i++){
-		Neighbors[i]=-1;
-	}
-
-        if (Neighbors == NULL)
-        { 
-              printf("Failure of Neighbors memory allocation\n");
-              return EXIT_FAILURE;
-        }
-		
-	int ind=1;
-	len=0;
-
-	for(int i=1 ; i<(neighbors[0]+1) ; i++){
-		if(neighbors[i]==-1){
-			if(len==1){
-				ind--;
-				Neighbors[ind]=-1;
-				len=0;
-				
-			}
-			else{
-				Neighbors[ind]=-1;
-				ind++;
-				len=0;
-			}
-		}
-		else{				
-			Neighbors[ind]=neighbors[i];
-			ind++;
-			len++;
-		}
-	}
-
-	ind = neighbors[0]+1;
-	while(Neighbors[ind]==-1){
-		ind--;
-	}
-
-	Neighbors[0]=ind+1;
-
-	free(neighbors);
-	free(AllAts);
-	free(OutAts);
-	free(CentAts);
-
-	return Neighbors;
 }

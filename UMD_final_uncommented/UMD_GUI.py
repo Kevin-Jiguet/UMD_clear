@@ -1302,11 +1302,11 @@ class MainWindow(QMainWindow):
         self.umdSpecbutton.clicked.connect(partial(select_File,self.umdfileSpec))
         
         hboxCA=QHBoxLayout()
-        hboxCA.addWidget(QLabel("Central atoms element :"))
+        hboxCA.addWidget(QLabel("Central atoms elements :"))
         hboxCA.addWidget(self.centralatom)
         
         hboxOA=QHBoxLayout()
-        hboxOA.addWidget(QLabel("Outer atoms element :"))
+        hboxOA.addWidget(QLabel("Outer atoms elements :"))
         hboxOA.addWidget(self.outeratom)
 
         
@@ -1374,10 +1374,10 @@ class MainWindow(QMainWindow):
         compute = True
                     
         if self.outeratom.text()=="":
-            self.specmessage.setText("Please select an element for the outer atom.")
+            self.specmessage.setText("Please select at least one element for the outer atoms.")
             compute = False
         elif self.centralatom.text()=="":
-            self.specmessage.setText("Please select an element for the central atom.")
+            self.specmessage.setText("Please select at least one element for the central atoms.")
             compute = False
             
         if self.bondfile.text()=="":
@@ -1403,9 +1403,18 @@ class MainWindow(QMainWindow):
  
         if compute :
             result=usefunction(speciation_and_angles,argv,self.specmessage)
-            print("result = ",result)
-            if result :
+            print("result : ",result)            
+            if result == True :
                 self.specmessage.setText("Population file successfully created under the name "+self.bondfile.text().split("/")[-1][:-4]+".r"+str(self.ring)+".popul.dat")
+            elif result != False :
+                if len(result) ==1 :
+                    self.specmessage.setText("ERROR : element "+result[0]+" not present in the provided simulation")
+                else :
+                    string = ""
+                    for el in result[:-2]:
+                        string+=el+", "
+                    string+=result[-2]+" and "+result[-1]
+                    self.specmessage.setText("ERROR : elements "+string+" not present in the provided simulation")
 
 
 

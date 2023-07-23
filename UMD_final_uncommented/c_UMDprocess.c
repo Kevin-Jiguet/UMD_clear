@@ -126,8 +126,27 @@ return Values;
 }
 
 
-int* defineBonds(const char *lines,int len,int CentMin,int CentMax,int OutMin,int OutMax){
+bool is_in(int atom,int *Indexes, int n){
+	bool result = false;
+	for(int i=0 ; i<n ; i++){
+		if((atom>=Indexes[2*i] && atom<=Indexes[2*i+1])){
+			result = true;
+		}
+	}
+	return result;
+}
+
+int num_atoms(int* Indexes, int n){
+	int num = 0;
+	for(int i=0 ; i<n ; i++){
+		num = num + Indexes[2*i+1]-Indexes[2*i] + 1;
+	}
+	return num;
+}
+
+int* defineBonds(const char *lines,int len,int *CentIndexes,int *OutIndexes, int nCent, int nOut,int natom){
 	
+	int N=0;
 	int number=0;
 	int nAts=0;
 	int nMax=0;
@@ -135,24 +154,30 @@ int* defineBonds(const char *lines,int len,int CentMin,int CentMax,int OutMin,in
 	bool newline = true ;
 	int *BondsList;
 	int *BondIndexes;
+	int numCent = 0;
+	int numOut = 0;
+	int iatom = 0;
+	
+	bool OnAtoms = true;	
 
-	BondsList = calloc(len,sizeof(int));
-	BondIndexes = calloc((CentMax+OutMax-CentMin-OutMin+2+3),sizeof(int));
+	numCent = num_atoms(CentIndexes,nCent);
+	numOut = num_atoms(OutIndexes,nOut);
+
+	BondsList = calloc((numCent+numOut)*(numCent+numOut+2),sizeof(int));
+
+	BondIndexes = calloc(natom+3,sizeof(int));
 	
 	BondIndexes[0]=1;
 	BondIndexes[1]=0;
 	BondsList[0]=1;
-	
-	
-
 	for(int i=0 ; i<len ; i++){
 
 
 		if(isdigit(lines[i])){number = number*10; number = number + (lines[i]-'0');}
 
-		else if(lines[i] == '\t'){
+		else if(lines[i] == '\t' && OnAtoms){
 			if(newline||ligand){
-				if((number<=CentMax && number>=CentMin)||(number<=OutMax && number>=OutMin)){
+				if(is_in(number,CentIndexes,nCent)||is_in(number,OutIndexes,nOut)){
 					if(newline){
 						newline = false;
 						ligand = true;
@@ -162,22 +187,20 @@ int* defineBonds(const char *lines,int len,int CentMin,int CentMax,int OutMin,in
 						BondsList[0]++;
 						nAts++;
 					}
-
-	
 				}	
 				else{newline = false ; number=0;}
 			}
 			number=0;
+
 		}
-		
-		else if(lines[i] == '\n'){
 
+		else if(lines[i] == '\n' && OnAtoms){
+			
+			iatom  ++;
+			if(iatom == natom){OnAtoms = false;}
 			if(nAts>nMax){nMax=nAts;}
-
-			if(ligand){
 			BondIndexes[BondIndexes[0]+1]=BondIndexes[BondIndexes[0]]+nAts;
 			BondIndexes[0]++;
-			}
 
 			nAts=0;
 			ligand = false;
@@ -185,6 +208,7 @@ int* defineBonds(const char *lines,int len,int CentMin,int CentMax,int OutMin,in
 			number=0;
 		}
 	}
+
 
 	
 	BondIndexes[BondIndexes[0]+1]=nMax;

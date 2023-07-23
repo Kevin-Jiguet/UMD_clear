@@ -31,21 +31,21 @@ LibraryName =""
 
 
 if OS == "Linux":
-    LibraryName = 'c_clusters.so'
+    LibraryName = 'c_clusters_full.so'
 
 elif OS == "Windows":
-    LibraryName = 'c_clusters.dll'
+    LibraryName = 'c_clusters_full.dll'
 
 elif OS == "Darwin":
-    LibraryName = 'c_clusters.dylib'
+    LibraryName = 'c_clusters_full.dylib'
     
 
 
 clust_lib = ctypes.cdll.LoadLibrary(join(path_new, LibraryName))
-clust_lib.fullclustering.argtypes = [ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
+clust_lib.fullclustering.argtypes = [ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
 clust_lib.fullclustering.restype = ctypes.POINTER(ctypes.c_int)
 
-clust_lib.angles.argtypes = [ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_double),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_double,ctypes.c_double,ctypes.c_double]
+clust_lib.angles.argtypes = [ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_double),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_double,ctypes.c_double,ctypes.c_double]
 clust_lib.angles.restype = ctypes.POINTER(ctypes.c_double)
 
 clust_lib.free_memory_int.argtypes = [ctypes.POINTER(ctypes.c_int)]
@@ -56,21 +56,21 @@ clust_lib.free_memory_double.restype = None
 
 
 def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the individual clusters, and the values are a list of list of their *consecutive* steps of existence. 
-        population_parallel={}
+        population={}
         for Snapshot in Clusters :
             for cluster in Snapshot :
-                if str(cluster) in population_parallel.keys():
-                    if population_parallel[str(cluster)][-1][-1]==Step-1:
-                        population_parallel[str(cluster)][-1].append(Step)
+                if str(cluster) in population.keys():
+                    if population[str(cluster)][-1][-1]==Step-1:
+                        population[str(cluster)][-1].append(Step)
                     else :
-                        population_parallel[str(cluster)].append([Step])
+                        population[str(cluster)].append([Step])
                 else :
-                    population_parallel[str(cluster)]=[[Step]]
+                    population[str(cluster)]=[[Step]]
             Step+=1
-        return population_parallel
+        return population
     
 
-def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,nAts,CentMin,CentMax,OutMin,OutMax,acell,r,AngleCalc):
+def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,natom,nAts,CentIndexes,OutIndexes,acell,r,AngleCalc):
     
 #    print(len(SnapshotBonds),len(SnapshotBondIndexes),len(SnapshotXCart))
     print("calculating species from snapshot n. "+str(step))
@@ -79,12 +79,15 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,nAts,CentMin
 
     SBp = (ctypes.c_int * len(SnapshotBonds))(*SnapshotBonds)
     BIp = (ctypes.c_int * (len(SnapshotBondIndexes)-1))(*SnapshotBondIndexes[:-1])
-    Np = clust_lib.fullclustering(SBp,BIp,nAts,CentMin,CentMax,OutMin,OutMax,M,r)#Computes the clusters
+    CIp = (ctypes.c_int * len(CentIndexes))(*CentIndexes)
+    OIp = (ctypes.c_int * len(OutIndexes))(*OutIndexes)
+    
+    Np = clust_lib.fullclustering(SBp,BIp,natom,nAts,CIp,OIp,int(len(CentIndexes)/2),int(len(OutIndexes)/2),M,r)#Computes the clusters
     Clusters = [[]]
     Angles = {}
     length = Np[0]
     #Converting C data into a python list of clusters
-    for i in range(1,length):
+    for i in range(1,length+1):
         atom=Np[i]
 #        print(atom)
         if atom ==-1 :
@@ -96,12 +99,13 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,nAts,CentMin
     
     if r==1 and AngleCalc:
         SXp = (ctypes.c_double * len(SnapshotXCart))(*SnapshotXCart)
-        Ap = clust_lib.angles(Np,len(Clusters),M,SXp,CentMin,CentMax,OutMin,OutMax,acell[0],acell[1],acell[2])
+        Ap = clust_lib.angles(Np,len(Clusters),M,SXp,CIp,int(len(CentIndexes)/2),OIp,int(len(OutIndexes)/2),acell[0],acell[1],acell[2])
         index=0
         flagnew=1
+#        sys.exit()
 #        print(Ap[0],M,len(Clusters))
         for i in range(1,int(Ap[0])):
-#            print(Ap[i],Np[i])
+  #          print(Ap[i],Np[i])
             if(Ap[i]==-1):
                 index=index+1
                 flagnew=1
@@ -121,14 +125,19 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,nAts,CentMin
     return Clusters,Angles
     
 
+def is_in(at,Indexes):
+    for i in range(int(len(Indexes)/2)):
+        if (at<=Indexes[2*i+1] and at>=Indexes[2*i]):
+            return True
+    return False
 
 def main(argv):
     umdpf.headerumd()
     BondFile='bonding.umd.dat'
     UMDFile=''
     Nsteps = 1
-    Central = []
-    Adjacent = []
+    Centrals = []
+    Adjacents = []
     minlife = 5
     rings = 1
     header = ''
@@ -164,11 +173,11 @@ def main(argv):
             UMDFile = str(arg)
         elif opt in ("-c","--Central"):
             header = header + ' -c=' + arg
-            Central = arg.split(",")
+            Centrals = arg.split(",")
             #print ('Cation list is: ',Cations)
         elif opt in ("-a","--Adjacent"):
             header = header + ' -a=' + arg
-            Adjacent = arg.split(",")
+            Adjacents = arg.split(",")
             #print ('Anion list is: ',Anions)
         elif opt in("-t","--Angles"):
             t = str(arg)
@@ -196,35 +205,56 @@ def main(argv):
         sys.exit()
 
 
-    CentMin,CentMax,AdjMin,AdjMax,MyCrystal,Bonds,BondsIndexes,TimeStep = umdpf.read_bonds(BondFile,Central[0],Adjacent[0],Nsteps)
+    CentIndexes,AdjIndexes,MyCrystal,[Bonds,BondsIndexes],TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps)
+    
+    if CentIndexes == -1 :
+        return AdjIndexes
+    
+    AllElements = []
+    nAts = 0
+    if Centrals != ["all"]:
+        for el in Centrals : 
+            if el not in AllElements : 
+                AllElements.append(el)
+                nAts += MyCrystal.types[MyCrystal.elements.index(el)]
+    else : 
+        AllElements = MyCrystal.elements
+        nAts = MyCrystal.natom
+    
+    if Adjacents != ["all"]:
+        for el in Adjacents :
+            if el not in AllElements : 
+                AllElements.append(el)
+                nAts += MyCrystal.types[MyCrystal.elements.index(el)]
+
+    else :
+        AllElements = MyCrystal.elements
+        nAts = MyCrystal.natom
+
+
+
 
     if t and rings==1:
-        MyCrystalX = umdpf.Crystallization(UMDFile)#in case the Bond File has been previously sampled, we adjust the sampling of the coordinates
-        Delta = MyCrystal.timestep/MyCrystalX.timestep
-        MyCrystalX,SnapshotsXCart,TimeStep,length = umdpf.read_values(UMDFile,"xcart","line",Nsteps*Delta)
+        MyCrystalUMD,TimeStepUMD = umdpf.Crystallization(UMDFile)
+        TimeRatio = int(TimeStep/TimeStepUMD)
+        MyCrystalUMD,SnapshotsXCart,TimeStepUMD,length = umdpf.read_values(UMDFile,"xcart","line",Nsteps*TimeRatio)
     else :
         SnapshotsXCart = [[] for _ in range(len(Bonds))]#Blank list which will not be used but is needed as an argument
     
-    print('Central atoms are : from ',CentMin,' to ',CentMax)
-    print('Coordinating atoms are : from ',AdjMin, ' to ', AdjMax)
-            
-    nAts = 0
-    if (CentMax-AdjMax)*(CentMin-AdjMin)>0:
-        nAts = (CentMax-CentMin+1)+(AdjMax-AdjMin+1)
-    else:
-        nAts = max((CentMax-CentMin+1),(AdjMax-AdjMin+1))
     
-    clusteringRed=partial(clustering, nAts=nAts,CentMin=CentMin,CentMax=CentMax,OutMin=AdjMin,OutMax=AdjMax,r=rings,acell=MyCrystal.acell,AngleCalc=t)
+#    CentMax,AdjMax,CentMin,AdjMin = 0,0,0,0
+    clusteringRed=partial(clustering,natom=MyCrystal.natom,nAts=nAts,CentIndexes=CentIndexes,OutIndexes=AdjIndexes,r=rings,acell=MyCrystal.acell,AngleCalc=t)
+
 
 #    DataII = []
 #    for i in range(len(Bonds)):
 #        DataII.append(clusteringRed(Bonds[i],BondsIndexes[i],SnapshotsXCart[i],i))
-
+#    print(DataII[0])
+#    sys.exit()
     with concurrent.futures.ProcessPoolExecutor() as executor :
         DataII=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
 
     clusters,Angles = map(list,zip(*DataII))
-      
     population=analysis_subtab(clusters,0)
         #Creating the output files        
     FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
@@ -240,7 +270,7 @@ def main(argv):
     fs.write(header)        
     headstring = "Clusters\tNumber of atoms\tComposition\n"
     for step in range(len(clusters)) :
-        st = "step\t"+str(step*Nsteps)+"\ntime\t"+str(step*Nsteps*TimeStep)+"\n"
+        st = "step "+str(step*Nsteps)+"\ntime "+str(step*Nsteps*TimeStep)+"\n"
         fs.write(st)
         fs.write(headstring)
         Clusts = clusters[step]
@@ -260,7 +290,7 @@ def main(argv):
             for at in clust :
                 vapor[at]=-1
         for at in vapor :
-            if at !=-1 and (at<=CentMax and at>=CentMin) or (at<=AdjMax and at>=AdjMin) :
+            if at !=-1 and (is_in(at,CentIndexes) or is_in(at,AdjIndexes)) :
                 fs.write(MyCrystal.elements[MyCrystal.typat[at]]+'\t1\t'+str(at)+'\n')
         
     fs.close()
@@ -361,7 +391,7 @@ def main(argv):
     
     print ('Population written in file :  ',FileAll)
     print ('Statistics written in file :  ',FileStat)
-    
+    print ('Species for each snapshot written in file :',FileStep)
     
     end=time.time()
     print("total duration : ",end-start, " s")

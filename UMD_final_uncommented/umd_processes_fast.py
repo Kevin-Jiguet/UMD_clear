@@ -43,7 +43,7 @@ for u in path_red:
 
 
 read_lib = ctypes.cdll.LoadLibrary(join(path_new, LibraryName))
-read_lib.defineBonds.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
+read_lib.defineBonds.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_int]
 read_lib.defineBonds.restype = ctypes.POINTER(ctypes.c_int)
 read_lib.read_umd_values.argtypes = [ctypes.POINTER(ctypes.c_char),ctypes.c_int,ctypes.c_int]
 read_lib.read_umd_values.restype = ctypes.POINTER(ctypes.c_double)
@@ -87,17 +87,19 @@ def read_snapshot_values_C(octettop,octetbot,step,natom,File,X,mode):#Extracts t
         
     return SnapshotValues
 
-def read_snapshotbonds_C(octettop,octetbot,CentMin,CentMax,OutMin,OutMax,File):#Converts the bonding information of a given snapshot into a list of atoms 
+def read_snapshotbonds_C(octettop,octetbot,CentIndexes,AdjIndexes,File,natom):#Converts the bonding information of a given snapshot into a list of atoms 
                                                                                #the data is contained between the octets "octettop" and "octetbot" in the bonding file
-    
     ff=open(File,"r")
     ff.seek(octettop,0)
     snapshot=ff.read(octetbot-octettop)
     ff.close()
 
     snapPointer = ctypes.c_char_p(snapshot.encode('utf-8'))
+    CIp = (ctypes.c_int * len(CentIndexes))(*CentIndexes)
+    AIp = (ctypes.c_int * len(AdjIndexes))(*AdjIndexes)
+
     
-    BList = read_lib.defineBonds(snapPointer,len(snapshot),CentMin,CentMax,OutMin,OutMax)
+    BList = read_lib.defineBonds(snapPointer,len(snapshot),CIp,AIp,int(len(CentIndexes)/2),int(len(AdjIndexes)/2),natom)
     SnapshotBondingTable = []
     SnapshotBondIndexes = []
    
@@ -252,16 +254,18 @@ def data_type(SnapshotsValuesList,natom,mode="line",datatype="list"):
     
     return SnapshotsValues
 
-def read_bonds(BondFile,centEl,adjEl,Nsteps=1,mode="Indexes"):
+def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
     
+    CentElWitness = [False for _ in range(len(centEls))]
+    AdjElWitness = [False for _ in range(len(adjEls))]
+
     
     MyCrystal,TimeStep = Crystallization(BondFile)
     
     
-    AdjacentElement = []
-    CentralElement = []
-    numCentAts =0
-    numAdjAts = 0
+    AdjacentElements = []
+    CentralElements = []
+
 
     for i in range(len(MyCrystal.elements)):
         el = MyCrystal.elements[i]
@@ -269,38 +273,61 @@ def read_bonds(BondFile,centEl,adjEl,Nsteps=1,mode="Indexes"):
         for ch in el :
             if not ch.isdigit():
                 trueEl+=ch
-        if trueEl == centEl or centEl =="all":
-            CentralElement.append(el)
-            numCentAts += MyCrystal.types[i]
+        if trueEl in centEls :
+            CentralElements.append(el)
+            CentElWitness[centEls.index(trueEl)]=True
 
-        if trueEl == adjEl or adjEl == "all":
-            AdjacentElement.append(el)
-            numAdjAts += MyCrystal.types[i]
+        elif el in centEls :
+            CentralElements.append(el)
+            CentElWitness[centEls.index(el)]=True
 
-    if centEl[-1].isdigit() and (centEl in MyCrystal.elements):
-        CentralElement = [centEl]
-        numCentAts = MyCrystal.types[MyCrystal.elements.index(centEl)]
-    if adjEl[-1].isdigit() and (adjEl in MyCrystal.elements):
-        AdjacentElement = [adjEl]
-        numAdjAts = MyCrystal.types[MyCrystal.elements.index(adjEl)]
-
-    if CentralElement == []:
-        print("ERROR : element ",centEl," not present in simulation")
-        sys.exit()        
-
-    if AdjacentElement == []:
-        print("ERROR : element ",adjEl," not present in simulation")
-        sys.exit()
-
-    indCent = MyCrystal.elements.index(CentralElement[0])
-    indAdj = MyCrystal.elements.index(AdjacentElement[0])
+        if trueEl in adjEls:
+            AdjacentElements.append(el)
+            AdjElWitness[adjEls.index(trueEl)]=True
+        elif el in adjEls:
+            AdjacentElements.append(el)
+            AdjElWitness[adjEls.index(el)]=True
+            
+    CentIndexes = []
+    AdjIndexes = []
     
-
-    CentMin = sum(MyCrystal.types[:indCent])
-    CentMax = CentMin + numCentAts-1
-    AdjMin = sum(MyCrystal.types[:indAdj])
-    AdjMax = AdjMin + numAdjAts-1
+    for el in CentralElements :
+        indCent = MyCrystal.elements.index(el)
+        CentMin = sum(MyCrystal.types[:indCent])
+        CentMax = CentMin + MyCrystal.types[indCent] -1
+        CentIndexes+=[CentMin,CentMax]
         
+
+    for el in AdjacentElements :
+        indAdj = MyCrystal.elements.index(el)
+        AdjMin = sum(MyCrystal.types[:indAdj])
+        AdjMax = AdjMin + MyCrystal.types[indAdj] -1
+        AdjIndexes+=[AdjMin,AdjMax]
+        
+   
+    if centEls == ["all"]:
+        CentIndexes = [0,MyCrystal.natom-1]
+        CentElWitness = [True]
+    if adjEls == ["all"]:
+        AdjIndexes = [0,MyCrystal.natom-1]
+        AdjElWitness = [True]
+        
+    noAt = []
+    for wit in range(len(CentElWitness)) :
+        if CentElWitness[wit] == False :
+            noAt.append(centEls[wit])
+
+    for wit in range(len(AdjElWitness)) :
+        if AdjElWitness[wit] == False :
+            noAt.append(adjEls[wit])
+
+    if noAt != []:
+        if len(noAt) ==1 :
+            print("ERROR : element ",noAt[0]," not present in simulation")
+        else :
+            print("ERROR : elements ",noAt," not presents in simulation")
+        return -1,noAt,0,[0,0],0
+
 #    print(CentMin,CentMax,AdjMin,AdjMax,indCent,indAdj)
 
     OctIndexes = Octets_from_File(BondFile,"step",MyCrystal.natom)
@@ -311,15 +338,23 @@ def read_bonds(BondFile,centEl,adjEl,Nsteps=1,mode="Indexes"):
         
     print("Extracting bonds from file ",BondFile)
     
-    bondsRed = partial(read_snapshotbonds_C,CentMin=CentMin, CentMax=CentMax, OutMin=AdjMin, OutMax=AdjMax, File=BondFile)
+    bondsRed = partial(read_snapshotbonds_C,CentIndexes=CentIndexes,AdjIndexes=AdjIndexes,File=BondFile,natom=MyCrystal.natom)
 
-#    bondsRed(OctTop[0],OctBot[0])    
+#    D=[]
+#    for i in range(len(OctTop)):
+#        print(i)
+#        D.append(bondsRed(OctTop[i],OctBot[i]))    
+        
+#    print(D[0][0])
+#    sys.exit()
+
     with concurrent.futures.ProcessPoolExecutor() as executor :
         Data = list(executor.map(bondsRed,OctTop,OctBot))
     Bonds = [D[0] for D in Data]
     BondsIndexes = [D[1] for D in Data]
     if mode == "Indexes":
-        return CentMin, CentMax, AdjMin, AdjMax, MyCrystal, Bonds, BondsIndexes, TimeStep
+        return CentIndexes, AdjIndexes, MyCrystal, [Bonds, BondsIndexes], TimeStep
+
     elif mode == "Dictionary":
         BondDicos = []
         
@@ -336,7 +371,7 @@ def read_bonds(BondFile,centEl,adjEl,Nsteps=1,mode="Indexes"):
                 if len(bondsList)>1:
                     Dico[atom]=bondsList
             BondDicos.append(Dico)
-        return CentMin, CentMax, AdjMin, AdjMax, MyCrystal, BondDicos, TimeStep
+        return CentIndexes, AdjIndexes, MyCrystal, BondDicos, TimeStep
 
 def read_stresses_4visc(UMDfile):
     ff=open(UMDfile,"r")
@@ -525,7 +560,6 @@ def read_bigheader_umd(umdfile, short=0):
                     break
     return(MyCrystal,TimeStep)
 
-    
 def copyhead(Target,File,Nsteps):
     
     ff = open(File,"r")
