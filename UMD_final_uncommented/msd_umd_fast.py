@@ -1,8 +1,8 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 ### Author : Kevin Jiguet-Covex
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import platform
 import sys,getopt,os.path
