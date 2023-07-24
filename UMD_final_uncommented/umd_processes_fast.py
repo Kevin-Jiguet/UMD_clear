@@ -129,7 +129,7 @@ def Octets_from_File(File,key,nlines):#Returns the indexes of octets pertaining 
     ff.close()
     return OctIndexes
 
-def Crystallization(File):#builds the Crystal
+def Crystallization(File,readlength = ""):#builds the Crystal
     MyCrystal = cr.Lattice()
     ff=open(File,"r")
     while True:
@@ -165,6 +165,8 @@ def Crystallization(File):#builds the Crystal
                     MyCrystal.typat[ii] = int(entry[ii+1])
             elif entry[0] == 'timestep':
                 TimeStep = float(entry[1])
+            elif entry[0] == 'time':
+                TimeInit = float(entry[1])
             elif entry[0] == 'acell':
                 MyCrystal.acell=[float(entry[1]),float(entry[2]),float(entry[3])]
             elif entry[0] == 'rprim_a':
@@ -182,7 +184,75 @@ def Crystallization(File):#builds the Crystal
             if entry[0] == 'atoms:':
                 break
     ff.close()
-    return MyCrystal, TimeStep
+    
+    if readlength == "WithLength" :
+    
+        ff = open(File,"rb")
+    
+        ff.seek(0,2)-1
+        octet = ff.tell()
+    
+        char = ff.read(1)
+    
+        while char in [b'0',b'1',b'2',b'3',b'4',b'5',b'6',b'7',b'8',b'9',b'\t',b'.',b'\n',b" ",b"-",b"e",b"+",b'']:
+            octet -= 1
+            ff.seek(octet)
+            char = ff.read(1)
+
+        timeBool = [0,0,0,0,0]
+        timeName = [b't',b'i',b'm',b'e',b' ']
+        index = 4
+    
+        while 0 in timeBool :
+            ff.seek(octet)
+            char = ff.read(1)
+            octet -= 1
+            if char in timeName and index==timeName.index(char):
+            
+                timeBool[index]=1
+                index -=1
+
+            else :
+                index = 4
+                timeBool=[0,0,0,0,0]
+    
+        octet += 6
+        time = 0
+        decimal = 0
+        ff.seek(octet)
+        char = ff.read(1)
+        while char in [b'0',b'1',b'2',b'3',b'4',b'5',b'6',b'7',b'8',b'9']:
+            time*=10
+            time+=int(char)
+            octet +=1 
+            ff.seek(octet)
+            char = ff.read(1)
+
+        if char == b'.':
+            exp=0
+            octet +=1 
+            ff.seek(octet)
+            char = ff.read(1)
+            while char in [b'0',b'1',b'2',b'3',b'4',b'5',b'6',b'7',b'8',b'9']:
+                decimal*=10
+                decimal+=int(char)
+                exp+=1
+                octet +=1 
+                ff.seek(octet)
+                char = ff.read(1)
+            decimal/=10**exp
+
+        time += decimal
+    
+        ff.close()
+    
+        length = int((time-TimeInit)/TimeStep)+1
+    
+        return MyCrystal, TimeStep, length
+
+    else :
+
+        return MyCrystal, TimeStep
 
 
 def read_values(UMDfile,key,mode="line",Nsteps=1,firststep = 0,laststep = None,cutoff="all"):
