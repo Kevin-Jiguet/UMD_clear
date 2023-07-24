@@ -56,7 +56,7 @@ def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic):
     msd=[]
     t2=time.time()
     msdP=msd_lib.compute_msd(Posp,hh,vv,ballistic,nitmax)
-    for i in range(nitmax):
+    for i in range(int(nitmax/vv)):
         msd.append(msdP[i])
     t3=time.time()
     msd_lib.free_memory(msdP)
