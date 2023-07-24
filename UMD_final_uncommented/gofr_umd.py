@@ -29,7 +29,7 @@ if OS == "Linux":
 elif OS == "Windows":
     LibraryName = 'c_gofr.dll'
 elif OS == "Darwin":
-    LibraryName = 'c_gofr.dylib'
+    LibraryName = 'c_gofr.cpython-39-darwin.so'
 
 
 current_path=os.path.abspath(__file__)#For all this to work, the file c_gofr.so must be in the same directory than gofr_umd
