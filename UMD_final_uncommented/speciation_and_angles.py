@@ -31,13 +31,13 @@ LibraryName =""
 
 
 if OS == "Linux":
-    LibraryName = 'c_clusters_full.so'
+    LibraryName = 'c_clusters.so'
 
 elif OS == "Windows":
-    LibraryName = 'c_clusters_full.dll'
+    LibraryName = 'c_clusters.dll'
 
 elif OS == "Darwin":
-    LibraryName = 'c_clusters_full.dylib'
+    LibraryName = 'c_clusters.dylib'
     
 
 
