@@ -270,7 +270,7 @@ def main(argv):
     fs.write(header)        
     headstring = "Clusters\tNumber of atoms\tComposition\n"
     for step in range(len(clusters)) :
-        st = "step "+str(step*Nsteps)+"\ntime "+str(step*Nsteps*TimeStep)+"\n"
+        st = "step\t"+str(step*Nsteps)+"\ntime "+str(step*Nsteps*TimeStep)+"\n"
         fs.write(st)
         fs.write(headstring)
         Clusts = clusters[step]
