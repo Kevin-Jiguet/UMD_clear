@@ -19,7 +19,7 @@ import ctypes
 import numpy as np
 
 
-current_path=os.path.abspath(__file__)#For all this to work, the files < c_clusters_B.so > and < c_define_bonds.so > must be in the same directory than gofr_umd
+current_path=os.path.abspath(__file__)#For all this to work, the file < c_clusters.so > must be in the same directory than gofr_umd
 path_split=current_path.split('/')
 path_red=path_split[1:-1]
 path_new=''
@@ -291,7 +291,7 @@ def main(argv):
                 vapor[at]=-1
         for at in vapor :
             if at !=-1 and (is_in(at,CentIndexes) or is_in(at,AdjIndexes)) :
-                fs.write(MyCrystal.elements[MyCrystal.typat[at]]+'\t1\t'+str(at)+'\n')
+                fs.write(MyCrystal.elements[MyCrystal.typat[at]]+'_1\t1\t['+str(at)+']\n')
         
     fs.close()
             
