@@ -1066,8 +1066,6 @@ class MainWindow(QMainWindow):
                 ff.close()
                     
                 self.gofrmessage.setText("gofr file successfully created under the name "+name)
-                self.gofrFile_edit.setText(name)
-
 
 
 
