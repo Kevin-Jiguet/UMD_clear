@@ -51,9 +51,12 @@ read_lib.free_memory.argtypes = [ctypes.POINTER(ctypes.c_double)]
 read_lib.free_memory.restype = None
 
 
-def read_snapshot_values_C(octettop,octetbot,step,natom,File,X,mode):#Extracts the coordinates from a snapshot 
+def read_snapshot_values_C(octettop,octetbot,step,natom,File,X,mode,maxStep):#Extracts the coordinates from a snapshot 
                                                                 #whose data is contained between the octets "octettop" and "octetbot" in the umd file (thus the prep_read_coord function)
                                                                 #The parameter X is the first index of the relevant 3 coordinate on each line in the umd file
+    if(100*step//maxStep!=100*(step-1)//maxStep):
+        sys.stdout.write("\rReading coordinates. Progress : "+str(100*step//maxStep)+"%\t")
+        sys.stdout.flush()
     ff=open(File,"r")
     ff.seek(octettop,0)
     snapshot=ff.read(octetbot-octettop)
@@ -93,7 +96,7 @@ def read_snapshotbonds_C(octettop,octetbot,CentIndexes,AdjIndexes,File,natom):#C
     ff.seek(octettop,0)
     snapshot=ff.read(octetbot-octettop)
     ff.close()
-
+    
     snapPointer = ctypes.c_char_p(snapshot.encode('utf-8'))
     CIp = (ctypes.c_int * len(CentIndexes))(*CentIndexes)
     AIp = (ctypes.c_int * len(AdjIndexes))(*AdjIndexes)
@@ -108,7 +111,6 @@ def read_snapshotbonds_C(octettop,octetbot,CentIndexes,AdjIndexes,File,natom):#C
         SnapshotBondingTable.append(BList[i])#This one contains the atoms
     for i in range(BList[0]+2,BList[0]+BList[1]+2):
         SnapshotBondIndexes.append(BList[i])#This one contains the information about which is bound to which in the other list
-        
     return SnapshotBondingTable,SnapshotBondIndexes
 
 def Octets_from_File(File,key,nlines):#Returns the indexes of octets pertaining to each snapshot in the file.
@@ -254,8 +256,7 @@ def Crystallization(File,readlength = ""):#builds the Crystal
 
         return MyCrystal, TimeStep
 
-
-def read_values(UMDfile,key,mode="line",Nsteps=1,firststep = 0,laststep = None,cutoff="all"):
+def read_values(UMDfile,key,mode="line",Nsteps=1,firststep = 0,laststep = None,cutoff="all",nCores = None):
     
     t=time.time()
     MyCrystal,TimeStep = Crystallization(UMDfile)
@@ -276,19 +277,19 @@ def read_values(UMDfile,key,mode="line",Nsteps=1,firststep = 0,laststep = None,c
 
     if key == "xred":
         X=0
-        print('Extracting the reduced coordinates from the file ',UMDfile)
+        print('Extracting the reduced coordinates from the file '+UMDfile+'... ')
  
     elif key == "xcart":
         X=3
-        print('Extracting the cartesian coordinates from the file ',UMDfile)
+        print('Extracting the cartesian coordinates from the file '+UMDfile+'... ')
 
     elif key == "absxcart":
         X=6
-        print('Extracting the absolute coordinates from the file ',UMDfile)
+        print('Extracting the absolute coordinates from the file '+UMDfile+'... ')
 
     elif key == "velocity":
         X=9
-        print('Extracting the velocities from the file ',UMDfile)
+        print('Extracting the velocities from the file '+UMDfile+'... ')
     elif key == "everything":
         X=-1
 
@@ -302,9 +303,14 @@ def read_values(UMDfile,key,mode="line",Nsteps=1,firststep = 0,laststep = None,c
     
         
     
-    readvalues = partial(read_snapshot_values_C,natom=MyCrystal.natom,File=UMDfile,X=X,mode=mode)
-    with concurrent.futures.ProcessPoolExecutor() as executor :
-        SnapshotsValuesList = list(executor.map(readvalues,OctTop,OctBot,[step for step in range(len(OctIndexes)-1)]))        
+    readvalues = partial(read_snapshot_values_C,natom=MyCrystal.natom,File=UMDfile,X=X,mode=mode,maxStep=len(OctTop)-1)
+    if nCores != None :
+        with concurrent.futures.ProcessPoolExecutor(max_workers = nCores) as executor :
+            SnapshotsValuesList = list(executor.map(readvalues,OctTop,OctBot,[step for step in range(len(OctTop))]))        
+    else:
+        with concurrent.futures.ProcessPoolExecutor() as executor :
+            SnapshotsValuesList = list(executor.map(readvalues,OctTop,OctBot,[step for step in range(len(OctTop))]))        
+
 
     print("Values extracted in ",(time.time()-t)," s")
     return MyCrystal, SnapshotsValuesList, TimeStep, len(OctIndexes)-1
@@ -324,15 +330,19 @@ def data_type(SnapshotsValuesList,natom,mode="line",datatype="list"):
     
     return SnapshotsValues
 
-def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
+def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes",nCores = None):
     
+    MyCrystal,TimeStep = Crystallization(BondFile)
+
+    if centEls == ['all']:
+        centEls = MyCrystal.elements
+    if adjEls == ['all']:
+        adjEls = MyCrystal.elements
+
     CentElWitness = [False for _ in range(len(centEls))]
     AdjElWitness = [False for _ in range(len(adjEls))]
 
-    
-    MyCrystal,TimeStep = Crystallization(BondFile)
-    
-    
+        
     AdjacentElements = []
     CentralElements = []
 
@@ -375,12 +385,12 @@ def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
         AdjIndexes+=[AdjMin,AdjMax]
         
    
-    if centEls == ["all"]:
-        CentIndexes = [0,MyCrystal.natom-1]
-        CentElWitness = [True]
-    if adjEls == ["all"]:
-        AdjIndexes = [0,MyCrystal.natom-1]
-        AdjElWitness = [True]
+#    if centEls == ["all"]:
+#        CentIndexes = [0,MyCrystal.natom-1]
+#        CentElWitness = [True]
+#    if adjEls == ["all"]:
+#        AdjIndexes = [0,MyCrystal.natom-1]
+#        AdjElWitness = [True]
         
     noAt = []
     for wit in range(len(CentElWitness)) :
@@ -397,6 +407,7 @@ def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
         else :
             print("ERROR : elements ",noAt," not presents in simulation")
         return -1,noAt,0,[0,0],0
+        
 
 #    print(CentMin,CentMax,AdjMin,AdjMax,indCent,indAdj)
 
@@ -405,25 +416,24 @@ def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
     OctTop = [OctIndexes[i*Nsteps] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates the beginning of each relevant snapshot
     OctBot = [OctIndexes[i*Nsteps+1] for i in range(int((len(OctIndexes)-1)/Nsteps))]#Indicates it's end
 
-        
     print("Extracting bonds from file ",BondFile)
     
     bondsRed = partial(read_snapshotbonds_C,CentIndexes=CentIndexes,AdjIndexes=AdjIndexes,File=BondFile,natom=MyCrystal.natom)
 
-#    D=[]
+#    Data=[]
 #    for i in range(len(OctTop)):
-#        print(i)
-#        D.append(bondsRed(OctTop[i],OctBot[i]))    
-        
-#    print(D[0][0])
-#    sys.exit()
-
-    with concurrent.futures.ProcessPoolExecutor() as executor :
-        Data = list(executor.map(bondsRed,OctTop,OctBot))
+#        Data.append(bondsRed(OctTop[i],OctBot[i]))            
+    if nCores != None :
+        with concurrent.futures.ProcessPoolExecutor(max_workers = nCores) as executor :
+            Data = list(executor.map(bondsRed,OctTop,OctBot))
+    else:
+        with concurrent.futures.ProcessPoolExecutor() as executor :
+            Data = list(executor.map(bondsRed,OctTop,OctBot))
+            
     Bonds = [D[0] for D in Data]
     BondsIndexes = [D[1] for D in Data]
     if mode == "Indexes":
-        return CentIndexes, AdjIndexes, MyCrystal, [Bonds, BondsIndexes], TimeStep
+        return CentIndexes, AdjIndexes, MyCrystal, [Bonds, BondsIndexes], TimeStep*Nsteps
 
     elif mode == "Dictionary":
         BondDicos = []
@@ -435,13 +445,16 @@ def read_bonds(BondFile,centEls,adjEls,Nsteps=1,mode="Indexes"):
             SnapBondsIndexes = BondsIndexes[i]
 #            print(SnapBondsIndexes)
 #            sys.exit()
-
-            for atom in range(CentMin,CentMax+1):
-                bondsList = SnapBonds[SnapBondsIndexes[atom-CentMin]:SnapBondsIndexes[atom-CentMin+1]]
-                if len(bondsList)>1:
-                    Dico[atom]=bondsList
+            for j in range(len(CentIndexes)//2):
+                CentMin = CentIndexes[2*j]
+                CentMax = CentIndexes[2*j+1]
+                for atom in range(CentMin,CentMax+1):
+                    bondsList = SnapBonds[SnapBondsIndexes[atom]:SnapBondsIndexes[atom+1]]
+                    if len(bondsList)>1:
+                        Dico[atom]=bondsList
             BondDicos.append(Dico)
-        return CentIndexes, AdjIndexes, MyCrystal, BondDicos, TimeStep
+        
+        return CentIndexes, AdjIndexes, MyCrystal, BondDicos, TimeStep*Nsteps
 
 def read_stresses_4visc(UMDfile):
     ff=open(UMDfile,"r")
@@ -645,7 +658,6 @@ def copyhead(Target,File,Nsteps):
         
         if len(l)>0 :
             if l[0] == "timestep":
-                print(l)
                 line = l[0] +" "+ str(float(l[1])*Nsteps) + " "+ l[2] +"\n"
             if l[0] == "atoms:":
                 ff.close()
