@@ -26,7 +26,7 @@ if OS == "Linux":
 elif OS == "Windows":
     LibraryName = 'c_gofr_new.dll'
 elif OS == "Darwin":
-    LibraryName = 'c_gofr_new.dylib’'
+    LibraryName = 'c_gofr_new.dylib'
 
 current_path=os.path.abspath(__file__)#For all this to work, the file c_bonds_fullD.so must be in the same directory than gofr_umd
 path_split=current_path.split('/')
