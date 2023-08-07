@@ -4,6 +4,7 @@
 ### Author : Kevin Jiguet-Covex
 
 
+
 import platform
 import sys,getopt,os.path
 import umd_processes_fast as umdpf
@@ -49,7 +50,10 @@ msd_lib.compute_msd.restype = ctypes.POINTER(ctypes.c_double)
 
 
 
-def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic):
+def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic,natom):
+    if((100*n)//natom!=(100*(n-1))//natom):
+        sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
+        sys.stdout.flush()
     t1=time.time()
     nitmax=(numsteps//2-ballistic)
     Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
@@ -60,16 +64,19 @@ def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic):
         msd.append(msdP[i])
     t3=time.time()
     msd_lib.free_memory(msdP)
-    print("step "+str(n)+" : conversions "+str(t2-t1)+" s ; calculations "+str(t3-t2)+" s" )
+#    print("step "+str(n)+" : conversions "+str(t2-t1)+" s ; calculations "+str(t3-t2)+" s" )
     return msd
 
-def msdAtom_CAxes(n,PosAr,numsteps,hh,vv,ballistic,Axes):
+def msdAtom_CAxes(n,PosAr,numsteps,hh,vv,ballistic,Axes,natom):
+    if((100*n)//natom!=(100*(n-1))//natom):
+        sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
+        sys.stdout.flush()
     t1=time.time()
     nitmax=(numsteps//2-ballistic)
     Axesp = (9 * ctypes.c_double)(*Axes)
     Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     msd=msd_lib.compute_msd_tilted(Posp,hh,vv,ballistic,nitmax,Axesp)
-    t2=time.time()    
+    t2=time.time()
     msdA1,msdA2,msdA3 = [], [], []
     for i in range(int(nitmax/vv)):
         msdA1.append(msd[i])
@@ -77,10 +84,14 @@ def msdAtom_CAxes(n,PosAr,numsteps,hh,vv,ballistic,Axes):
         msdA3.append(msd[i+2*int(nitmax/vv)])
     msd_lib.free_memory(msd)
     t3=time.time()
-    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
+#    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
     return msdA1,msdA2,msdA3
 
-def msdAtom_CAxes_multi(n,PosAr,numsteps,hh,vv,ballistic,Axes,nAxes):
+def msdAtom_CAxes_multi(n,PosAr,numsteps,hh,vv,ballistic,Axes,nAxes,natom):
+
+    if((100*n)//natom!=(100*(n-1))//natom):
+        sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
+        sys.stdout.flush()
     t1=time.time()
     nitmax=(numsteps//2-ballistic)
     Axesp = (3*nAxes * ctypes.c_double)(*Axes)
@@ -93,13 +104,14 @@ def msdAtom_CAxes_multi(n,PosAr,numsteps,hh,vv,ballistic,Axes,nAxes):
             msds[j].append(msd[i+j*int(nitmax/vv)])
     msd_lib.free_memory(msd)
     t3=time.time()
-    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
+#    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
     return msds
 
 
 def main(argv):
     hh = 1
     vv = 1
+    u=0
     ballistic = 0
     TimeStep = 1
     umdpf.headerumd()
@@ -109,8 +121,9 @@ def main(argv):
     Auto = False
 #    Axes=[1,0,0,0,1,0,0,0,1]
     Axes = None
+    nCores=None
     try:
-        opts, arg = getopt.getopt(argv,"hf:z:v:b:m:a:",["fumdfile","zHorizontalJump","vVerticalJump","bBallistic","mMode","aAxes"])
+        opts, arg = getopt.getopt(argv,"hf:z:v:b:m:a:k:",["fumdfile","zHorizontalJump","vVerticalJump","bBallistic","mMode","aAxes","knCores"])
     except getopt.GetoptError:
         print ('msd_umd.py -f <XYZ_filename> -z <HorizontalJump> -v <VerticalJump> -b <Ballistic> -m <Mode> -a <Axes>')
         sys.exit(2)
@@ -158,6 +171,8 @@ def main(argv):
                     Axes[3*i]/=li
                     Axes[3*i+1]/=li
                     Axes[3*i+2]/=li
+        elif opt in ("-k","--nCores"):
+            nCores = int(arg)
 
             
     if (os.path.isfile(umdfile)):
@@ -176,19 +191,26 @@ def main(argv):
         
 
         print ('Number of atoms of each type is ',MyCrystal.types)
-
         Instants = []
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            if Axes !=None :
-                msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes)
-            else :
-                msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic)
 
-            msdfile = umdfile[:-8] + '.msd_fast'
-            print(len(ListAbsXcart))
+        if nCores!=None:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=nCores) as executor:
+                if Axes !=None :
+                    msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes,natom=MyCrystal.natom-1)
+                else :
+                    msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,natom=MyCrystal.natom-1)
+        else :
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                if Axes !=None :
+                    msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes,natom=MyCrystal.natom-1)
+                else :
+                    msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,natom=MyCrystal.natom-1)
+
+                msdfile = umdfile[:-8] + '.msd_fast'
                               
-            msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[ListAbsXcart[iatom] for iatom in range(MyCrystal.natom)]))
+                msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[ListAbsXcart[iatom] for iatom in range(MyCrystal.natom)]))
 
+            print("\n")
             headerstring='MSD : -f '+umdfile+' -m '+ Mode +'-a '+str(Axes)+'\n'
             if(Mode=="elements"):
                 
@@ -221,7 +243,7 @@ def main(argv):
  #                   print(niter, hh, ballistic)
                 weight=int((int(numsteps/2)-ballistic)/hh)-1
  #                   print("weight=",weight*MyCrystal.natom)                    
-                for ii in range(len(MSD[0][0])):     
+                for ii in range(len(MSD[0][0])):
                     instant = (float(ii)*TimeStep*vv)+ballistic
                     Instants.append(instant)
                     string = str(instant)
@@ -231,6 +253,7 @@ def main(argv):
                             for kk in range(1,nAxes+1):
                                 string += '\t' + str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight)))
                     string = string + '\n'
+#                    print("writing string ",ii," : ",string)
                     f.write(string)
                 print ('MSDs printed in file ',msdfile)
             

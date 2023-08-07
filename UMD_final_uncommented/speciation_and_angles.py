@@ -8,6 +8,7 @@ Created on Tue May 30 09:44:43 2023
 ##AUTHORS: KEVIN JIGUET
 ###
 
+import math
 import platform
 import sys,getopt,os.path
 import umd_processes_fast as umdpf
@@ -54,26 +55,145 @@ clust_lib.free_memory_int.restype = None
 clust_lib.free_memory_double.argtypes = [ctypes.POINTER(ctypes.c_double)]
 clust_lib.free_memory_double.restype = None
 
+def analysis_BondLives(BondFile,Centrals,Adjacents,Nsteps,nCores):
+    
+    CentIndexes,AdjIndexes,MyCrystal,Bonds,TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps,mode = "Dictionary",nCores=nCores)
+
+    DicoBonds = {}
+    for centInd in CentIndexes[::2] :
+        for adjInd in AdjIndexes[::2] :
+            centEl = MyCrystal.elements[MyCrystal.typat[centInd]]
+            adjEl = MyCrystal.elements[MyCrystal.typat[adjInd]]
+            key = centEl+"-"+adjEl
+            DicoBonds[key] = []
+
+    DicoIndBonds = {}
+    for step in range(len(Bonds)) :
+        SnapshotBonds = Bonds[step]
+        for el in range(len(CentIndexes)//2):
+            for centAt in range(CentIndexes[2*el],CentIndexes[2*el+1]+1):
+                if centAt in SnapshotBonds :
+                    bonds = SnapshotBonds[centAt]
+                    for adjAt in bonds : 
+                        bond = [centAt,adjAt]
+                        if str(bond) in DicoIndBonds.keys():
+                            if DicoIndBonds[str(bond)][-1][-1] == step -1:
+                                DicoIndBonds[str(bond)][-1][-1] +=1
+                            else :
+                                DicoIndBonds[str(bond)].append([step,step])
+                        else :
+                            DicoIndBonds[str(bond)]=[[step,step]]
+ 
+    for key in DicoIndBonds :
+        bond = eval(key)
+        name = MyCrystal.elements[MyCrystal.typat[bond[0]]]+"-"+MyCrystal.elements[MyCrystal.typat[bond[1]]]
+        listLives = []
+        times = DicoIndBonds[key]
+        for life in times :
+            listLives.append((life[1]-life[0]+1))
+        DicoBonds[name]+=listLives
+
+    return DicoBonds,TimeStep
+    
 
 def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the individual clusters, and the values are a list of list of their *consecutive* steps of existence. 
-        population={}
-        for Snapshot in Clusters :
-            for cluster in Snapshot :
-                if str(cluster) in population.keys():
-                    if population[str(cluster)][-1][-1]==Step-1:
-                        population[str(cluster)][-1].append(Step)
-                    else :
-                        population[str(cluster)].append([Step])
+    population={}
+    for Snapshot in Clusters :
+        for cluster in Snapshot :
+            if str(cluster) in population.keys():
+                if population[str(cluster)][-1][-1]==Step-1:
+                    population[str(cluster)][-1].append(Step)
                 else :
-                    population[str(cluster)]=[[Step]]
-            Step+=1
-        return population
+                    population[str(cluster)].append([Step])
+            else :
+                population[str(cluster)]=[[Step]]
+        Step+=1
+    return population
     
+def compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,OutMin,OutMax,fa,TimeStep,Nsteps):
+    acell=MyCrystal.acell
+    TotMean=0
+    TotNangles=0
+    for step in range(len(Bonds)) :
+#        print("step ",step," on",len(Bonds))
+        SnapshotAngles=[]
+        SnapshotBonds=Bonds[step]
+        MySnapshot=AllSnapshots[step]
+        fa.write('\nstep : '+str(step*Nsteps)+'\ntime :'+str(step*TimeStep*Nsteps)+" fs \n")
+        line='Angles : \n'
+        Nangles=0
+        for internAt in SnapshotBonds :
+            if internAt<=CentMax and internAt>=CentMin:
+                for iexternAt in SnapshotBonds[internAt]:
+                    if iexternAt<=OutMax and iexternAt>=OutMin:
+                        for jexternAt in SnapshotBonds[internAt]:
+                            if jexternAt<=OutMax and jexternAt>=OutMin:
+                                if iexternAt<jexternAt :    
+                                    Nangles+=1
+                        
+                                    xEi,yEi,zEi=MySnapshot[iexternAt][0],MySnapshot[iexternAt][1],MySnapshot[iexternAt][2]
+                                    xEj,yEj,zEj=MySnapshot[jexternAt][0],MySnapshot[jexternAt][1],MySnapshot[jexternAt][2]
+                                    xI,yI,zI=MySnapshot[internAt][0],MySnapshot[internAt][1],MySnapshot[internAt][2]
+                        
+                                    dx = xEi-xEj
+                                    dy = yEi-yEj
+                                    dz = zEi-zEj
+                        
+                                    valx = min(dx**2, (acell[0]-dx)**2, (acell[0]+dx)**2)
+                                    valy = min(dy**2, (acell[1]-dy)**2, (acell[1]+dy)**2)
+                                    valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
+                                    distEiEj = valx + valy + valz               
+                        
+                                    dx = xI-xEj
+                                    dy = yI-yEj
+                                    dz = zI-zEj                        
+                        
+                                    valx = min(dx**2, (acell[0]-dx)**2, (acell[0]+dx)**2)
+                                    valy = min(dy**2, (acell[1]-dy)**2, (acell[1]+dy)**2)
+                                    valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
+                                    distIEj = valx + valy + valz               
+                        
+                                    dx = xEi-xI
+                                    dy = yEi-yI
+                                    dz = zEi-zI                        
+                        
+                                    valx = min(dx**2, (acell[0]-dx)**2, (acell[0]+dx)**2)
+                                    valy = min(dy**2, (acell[1]-dy)**2, (acell[1]+dy)**2)
+                                    valz = min(dz**2, (acell[2]-dz)**2, (acell[2]+dz)**2)
+                                    distIEi = valx + valy + valz               
+        
+                                    angle=math.acos((distIEi+distIEj-distEiEj)/(2*math.sqrt(distIEi*distIEj)))/math.pi*180
+                                    
+                                    line+=str(angle)+"\t("+str(iexternAt)+"-"+str(internAt)+"-"+str(jexternAt)+") \n"
+                        
+                                    SnapshotAngles.append(angle)
+        fa.write(line)
 
-def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,natom,nAts,CentIndexes,OutIndexes,acell,r,AngleCalc):
+        TotNangles+=Nangles
+        if Nangles!=0:
+            mean=sum(SnapshotAngles)/Nangles                  
+            msd=0
+            TotMean+=sum(SnapshotAngles)
+            for angle in SnapshotAngles:
+                msd+=(angle-mean)**2
+            msd/=mean
+            msd=math.sqrt(msd)
+        
+            fa.write("mean : "+str(mean)+"\tmsd : "+str(msd)+"\n")
+        fa.write("end of step\n")
+
+    if(TotNangles!=0):
+        TotMean/=TotNangles
+
+    fa.write("\n\n Mean of all angles : "+str(TotMean))
+    fa.close()
+        
+def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,natom,nAts,CentIndexes,OutIndexes,acell,r,AngleCalc):
     
-#    print(len(SnapshotBonds),len(SnapshotBondIndexes),len(SnapshotXCart))
-    print("calculating species from snapshot n. "+str(step))
+    if(100*step//maxSteps != 100*(step-1)//maxSteps):
+        sys.stdout.write("\rBuilding species. Progress : "+str(100*step//maxSteps)+"%")        
+        sys.stdout.flush()
+        
     M=SnapshotBondIndexes[-1]#maximum number of bound atoms for any atoms
     #Preparing data for the C script        
 
@@ -89,9 +209,7 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,natom,nAts,C
     #Converting C data into a python list of clusters
     for i in range(1,length+1):
         atom=Np[i]
-#        print(atom)
         if atom ==-1 :
-#            Clusters[-1].sort()
             Clusters.append([])
         else :   
             Clusters[-1].append(atom)
@@ -102,10 +220,7 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,natom,nAts,C
         Ap = clust_lib.angles(Np,len(Clusters),M,SXp,CIp,int(len(CentIndexes)/2),OIp,int(len(OutIndexes)/2),acell[0],acell[1],acell[2])
         index=0
         flagnew=1
-#        sys.exit()
-#        print(Ap[0],M,len(Clusters))
         for i in range(1,int(Ap[0])):
-  #          print(Ap[i],Np[i])
             if(Ap[i]==-1):
                 index=index+1
                 flagnew=1
@@ -142,22 +257,26 @@ def main(argv):
     rings = 1
     header = ''
     start=time.time()
-    t = False
+    t = 0
+    p = 1
+    b = 0
+    nCores = None
     try:
-        opts, arg = getopt.getopt(argv,"hf:u:s:c:a:m:r:t:",["fBondFile","uUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","tAngles"])
+        opts, arg = getopt.getopt(argv,"hf:u:s:c:a:m:r:t:b:p:k:",["fBondFile","uUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","pPopulation","tAngles","bBondslife","pPopulation","knCores"])
     except getopt.GetoptError:
-        print ('speciation_and_angles.py -f <bond_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -n <nChunks>')
+        print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('speciation_and_angles.py program to compute bonding maps and identify speciation')
-            print ('speciation_and_angles.py -f <Bonding_filename> -s <Sampling_Frequency> -c <Central> -a <Adjacent> -m <MinLife> -r <Rings> -t <Angles>')
+            print ('speciation_and_angles.py program to identify speciation, calculating angles, and evaluating the lifetime of bonds')
+            print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
             print ('default values: -f bonding.umd.dat -s 1 -m 5 -r 1')
             print ('the bond file contains the bonds relations for each snapshot. Computed with Bond_fast_specific.py.')
             print ("-c and -a : central and adjacent elements respectively. If one is 'all', every atom will be taken in account for this role.")
             print ('-r : rings = 1 default, all adjacent atoms bind to central atoms ; rings = 0, polymerization, all adjacent atoms bind to central AND other adjacent atoms ; rings = x>0, all adjacent atoms bind to central then to other adjacent atoms to form a xth-coordination polyhedra')
             print ('-m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
-            print ('-t : nothing (default) or True. In the latter case, and only if -r = 1,the angles of the molecules will be computed, their summit being the central atom. If this option is activated, the user needs to provide the corresponding umd file.')
+            print ('-t : nothing (default) or 1. In the latter case, and only if -r = 1,the angles of the molecules will be computed, their summit being the central atom. If this option is activated, the user needs to provide the corresponding umd file.')
+            print ('-b : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
             print ('-u : umd file used to calculate the angles.')
             sys.exit()
         elif opt in ("-f", "--fBondFile"):
@@ -179,10 +298,12 @@ def main(argv):
             header = header + ' -a=' + arg
             Adjacents = arg.split(",")
             #print ('Anion list is: ',Anions)
-        elif opt in("-t","--Angles"):
-            t = str(arg)
-            if t == "True":
-                t=True
+        elif opt in("-t","--tAngles"):
+            t = int(arg)
+        elif opt in("-p","--pPopulation"):
+            p = int(arg)
+        elif opt in("-b","--bBondslife"):
+            b = int(arg)
         elif opt in ("-r","--rRings"):
             rings = int(arg)
             if rings == 0:
@@ -193,6 +314,8 @@ def main(argv):
                 print ('Undefined calculation')
                 print ('-r should be a positive integer')
                 sys.exit()
+        elif opt in("-k","--kCores"):
+            nCores = int(arg)
 
     header = header + ' -r=' + str(rings)
 
@@ -200,16 +323,95 @@ def main(argv):
         print ('the bond file ',BondFile,' does not exist')            
         sys.exit()
 
-    if t and (not (os.path.isfile(UMDFile))):
+    if t==1 and (not (os.path.isfile(UMDFile))):
         print ('the UMD file ',UMDFile,' does not exist')            
         sys.exit()
-
-
-    CentIndexes,AdjIndexes,MyCrystal,[Bonds,BondsIndexes],TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps)
     
-    if CentIndexes == -1 :
+    sys.stdout.write(str(os.cpu_count())+" cores are available. ")
+    if nCores != None :
+        sys.stdout.write("We will use "+str(nCores)+" of them.\n")        
+    else :
+        sys.stdout.write("The number that will be used is automatically determined.\n")
+
+            
+    if b==1 :
+        print("Calculating the lifetimes of the bonds...")
+        DicoBonds,TimeStep = analysis_BondLives(BondFile,Centrals,Adjacents,Nsteps,nCores)
+        DicoLives = {}
+        for name in DicoBonds :
+            times = DicoBonds[name]
+            if times !=[]:
+                times.sort()
+                timebins=[i+1 for i in range(times[-1])]
+                timenums=[0 for i in range(times[-1])]
+                for life in times :
+                    timenums[life-1]+=1    
+                DicoLives[name] = [timebins,timenums]
+            else:
+                DicoLives[name] = [[],[]]
+        FileName = BondFile[:-4]+".bondslives.dat"
+        fb = open(FileName,"w")
+        centstring = ""
+        for el in Centrals[:-1] :
+            centstring += el+", "
+        centstring+=Centrals[-1]
+        outstring = ""
+        for el in Adjacents[:-1] :
+            outstring += el+", "
+        outstring+=Adjacents[-1]
+        header = "Bonds lifetime from file "+BondFile+"\tCentral elements : "+centstring+"  Coordinating elements : "+outstring+"\n\n"
+        fb.write(header)
+        for name in DicoLives :
+            [timebins,timenums]=DicoLives[name]
+            Bondheader = "Bond : "+name+"\n"+"lifetime (fs)\tquantity\tpercentage\n"
+            fb.write(Bondheader)
+            ntot = sum(timenums)
+            for timebin in timebins :
+                line = ""
+                line+=str((timebin-1)*TimeStep+1)+"\t"+str(timenums[timebin-1])+"\t"+str(timenums[timebin-1]/ntot*100)+"\n"
+                fb.write(line)
+            fb.write("\n")
+        print("Bonds lifetimes written in file ",FileName)
+        fb.close()
+ 
+    if t==0 and p==0 :
+        return True
+    if t==1 and p==0 :
+        if len(Centrals)==1 and len(Adjacents)==1:
+            CentIndexes,AdjIndexes,MyCrystal,Bonds,TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps,"Dictionary")
+            if CentIndexes == -1 :#For the GUI to display an error message whenever an element is missing
+                return AdjIndexes
+            
+
+            
+            MyCrystalUMD,TimeStepUMD = umdpf.Crystallization(UMDFile)
+            TimeRatio = int(TimeStep/TimeStepUMD)
+
+            (MyCrystalUMD,AllSnapshots,TimeStepUMD,length)=umdpf.read_values(UMDFile,"xcart","lists",Nsteps*TimeRatio)
+            
+            CentMin = CentIndexes[0]
+            CentMax = CentIndexes[1]
+            AdjMin = AdjIndexes[0]
+            AdjMax = AdjIndexes[1]
+        
+            File=str(UMDFile)+".angles_umdpf.dat"
+        
+            fa=open(File,'w')
+            fa.write(header)
+            compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,AdjMin,AdjMax,fa,TimeStep,Nsteps)    
+        
+            print("Angles computed successfully. File created under the name ",File)
+            print("total duration : ",(time.time()-start))
+            return True
+        
+        else:
+            print("Too many elements to compute the angles only. Regular identification of the chemical species will be proceeded.")
+ 
+    CentIndexes,AdjIndexes,MyCrystal,[Bonds,BondsIndexes],TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps,nCores=nCores)
+
+    if CentIndexes == -1 :#For the GUI to display an error message whenever an element is missing
         return AdjIndexes
-    
+
     AllElements = []
     nAts = 0
     if Centrals != ["all"]:
@@ -226,24 +428,19 @@ def main(argv):
             if el not in AllElements : 
                 AllElements.append(el)
                 nAts += MyCrystal.types[MyCrystal.elements.index(el)]
-
     else :
         AllElements = MyCrystal.elements
         nAts = MyCrystal.natom
-
-
-
-
-    if t and rings==1:
+        
+        
+    if (t==1) and (rings==1):
         MyCrystalUMD,TimeStepUMD = umdpf.Crystallization(UMDFile)
         TimeRatio = int(TimeStep/TimeStepUMD)
-        MyCrystalUMD,SnapshotsXCart,TimeStepUMD,length = umdpf.read_values(UMDFile,"xcart","line",Nsteps*TimeRatio)
+        MyCrystalUMD,SnapshotsXCart,TimeStepUMD,length = umdpf.read_values(UMDFile,"xcart","line",Nsteps*TimeRatio,nCores=nCores)
     else :
         SnapshotsXCart = [[] for _ in range(len(Bonds))]#Blank list which will not be used but is needed as an argument
     
-    
-#    CentMax,AdjMax,CentMin,AdjMin = 0,0,0,0
-    clusteringRed=partial(clustering,natom=MyCrystal.natom,nAts=nAts,CentIndexes=CentIndexes,OutIndexes=AdjIndexes,r=rings,acell=MyCrystal.acell,AngleCalc=t)
+    clusteringRed=partial(clustering,maxSteps=len(Bonds)-1,natom=MyCrystal.natom,nAts=nAts,CentIndexes=CentIndexes,OutIndexes=AdjIndexes,r=rings,acell=MyCrystal.acell,AngleCalc=t)
 
 
 #    DataII = []
@@ -251,10 +448,20 @@ def main(argv):
 #        DataII.append(clusteringRed(Bonds[i],BondsIndexes[i],SnapshotsXCart[i],i))
 #    print(DataII[0])
 #    sys.exit()
-    with concurrent.futures.ProcessPoolExecutor() as executor :
-        DataII=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
 
-    clusters,Angles = map(list,zip(*DataII))
+    if nCores != None :
+        with concurrent.futures.ProcessPoolExecutor(max_workers = nCores) as executor :
+            Data=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
+    else : 
+        with concurrent.futures.ProcessPoolExecutor() as executor :
+            Data=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
+            
+    clusters,Angles = map(list,zip(*Data))
+    
+#    if t==1 and p==0 :
+#        FileAngles = K
+#        fang = open()
+    
     population=analysis_subtab(clusters,0)
         #Creating the output files        
     FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
@@ -264,7 +471,7 @@ def main(argv):
     FileStep = BondFile[:-4] + '.r=' + str(rings) + '.step.dat'
     header+="\n"            
     
-    print("Writing...")
+    print("\nWriting...")
     
     fs = open(FileStep,'w')
     fs.write(header)        
