@@ -8,6 +8,186 @@ Created on Wed May 17 07:43:57 2023
 import sys, getopt, os.path, itertools, math
 import numpy as np
 
+def Variables(filename):
+    ff=open(filename,'r')
+    fline = ff.readline().split()
+    dumpstyle='MINI'
+    indtype=None
+    PresList,PosList=None,None
+    if len(fline)>0 and fline[0]=='ITEM:':   
+        dumpstyle='ITEMS'
+        VarList=['xs','ys','zs','x','y','z','xa','ya','za','vx','vy','vz','fx','fy','fz','id']
+        PresList=[0 for _ in range(16)]
+        PosList=[]
+        while len(fline)<2 or fline[1]!="ATOMS":
+            fline=ff.readline().split()
+        for var in fline[2:]:
+            if var in VarList :
+                PresList[VarList.index(var)]=1
+                PosList.append(VarList.index(var))
+            elif var=='type':
+                indtype=len(PosList)
+                PosList.append(-1)
+            else:
+                PosList.append(-1)
+
+    ff.close()
+    return PresList,PosList,indtype,dumpstyle
+
+def Crystal(filename,logname,indtype):
+    natom = 0
+    types =  []
+    elements = []
+    ntypat = 0
+    typat = []
+    t0 = 0
+    style=""
+    
+    fl=open(logname,"r")
+    ff=open(filename,"r")
+
+    while True : 
+        line=fl.readline()
+        if not line : 
+            break
+        line = line.strip()
+        
+        if line == "Reading data file ...":
+            line=fl.readline().strip().split()
+            acellx = float(line[7].strip('('))-float(line[3].strip('('))
+            acelly = float(line[8].strip('('))-float(line[4].strip('('))
+            acellz = float(line[9].strip(')'))-float(line[5].strip(')'))
+        elif line == "# SIMULATION":
+            break
+        else :
+            line = line.split()
+            if line !=[]:
+                if line[0] == "timestep":
+                    if line[1] == "${dt}":
+                        line = fl.readline().strip().split()
+                        timestepLog = float(line[1])*1000
+                    else :
+                        timestepLog = float(line[1])*1000
+                elif line[0] == "thermo_style":
+                    style = line[1]
+
+    isatoms = 0
+    fl.close()
+    fl=open(logname,'r')
+    IEindex = None
+    Enthindex = None
+    Tempindex = None
+    Pressindex = None
+
+    while True :
+        line=fl.readline()
+        if not line : 
+            break
+        line = line.strip().split()
+        if len(line)>0 and line[0]=="group" and isatoms!=2:
+            line = fl.readline().strip().split()
+            types.append(int(line[0]))
+            natom+=types[-1]
+            typat+=[ntypat for _ in range(types[-1])]
+            ntypat+=1
+            isatoms=1
+        elif isatoms==1:
+            isatoms=2
+            
+        if len(line)>3 and (line[0]=='dump_modify' or line[0]=='#dump_modify') and line[1]=="d1" and line[2]=="element":
+            j=-1
+            el=line[j]
+            while el!="element":
+                elements.append(el)
+                j-=1
+                el=line[j]
+            elements.reverse()
+            
+        if len(line)>2 and line[0] == "Per" and line[1] == "MPI" and line[2] == "rank":
+            if style == "one" or style == "custom":
+                Variables = fl.readline().strip().split()
+                for i in range(len(Variables)) : 
+                    v=Variables[i]
+                    if v == "Temp":
+                        Tempindex = i
+                    elif v == "Press":
+                        Pressindex = i
+                    elif v == "TotEng":
+                        IEindex = i
+                    elif v =="Enthalpy":
+                        Enthindex = i
+            break
+    #Determining the timestep between two snapshots in the dump file
+    t0=None        
+            
+    while True :
+        l = ff.readline()
+        if not l :
+            break
+        line = l.strip().split()
+        if len(line)>1 and line[1] == "TIMESTEP":
+            line=ff.readline().strip().split()
+            if t0 == None :
+                t0=float(line[0])
+            else : 
+                timestepFile = (float(line[0]) - t0)*timestepLog
+                break
+        if len(line)>1 and line[1]=="Timestep:":
+            if t0 == None :
+                t0=float(line[2])
+            else : 
+                timestepFile = (float(line[2]) - t0)*timestepLog
+                break
+    #If the information about atoms isn't fully contained in the log file
+    if(natom==0):
+        types=[]
+        ntypat=0
+        typat=[]
+        elements=[]
+        currentType=-1
+        if indtype==None :
+            print("error : no way to determine the species")
+            sys.exit()
+        line=ff.readline().strip().split()
+        while len(line)<2 or line[1]!="ATOMS":
+            line=ff.readline().strip().split()
+        line=ff.readline().strip().split()
+        while line[0] != "ITEM:":           
+            if currentType != int(line[indtype])-1:
+                ntypat+=1
+                types.append(1)
+                currentType = int(line[indtype])-1 
+            else:
+                types[-1]+=1
+            line=ff.readline().strip().split()
+                
+            typat.append(currentType)
+        icounter=0
+        fl.close()
+        fl=open(logname,'r')
+        line=fl.readline().strip().split()
+        while len(line)<3 or (line[0]!="use" or line[1]!="deepmd-kit" or line[2]!="at:"):
+            line=fl.readline().strip().split()
+            icounter+=1
+            if icounter ==100 :
+                break
+        j=-1
+        while True:
+            el=line[j]
+
+            if el =="*":
+                break
+            else : 
+                elements.append(el)
+            j-=1
+        elements.reverse()
+        natom=len(typat)
+    
+
+    ff.close()
+    fl.close()
+    return natom,types,elements,ntypat,typat,[acellx,acelly,acellz],Tempindex,Pressindex,IEindex,Enthindex,timestepLog,timestepFile,style
+
 def main(argv):
     
     filename = ""
@@ -32,86 +212,12 @@ def main(argv):
     print("Will use the file <"+logname+"> for thermodynamic data")
     print("Will use the file <"+allname+"> for stress tensor values\n") 
         
-    fl = open(logname,'r')
+    
+    PresList,PosList,indtype,dumpstyle=Variables(filename)
+
+    natom,types,elements,ntypat,typat,[acellx,acelly,acellz],Tempindex,Pressindex,IEindex,Enthindex,timestepLog,timestepFile,style = Crystal(filename,logname,indtype)
+    
     fa = open(filename+".umd.dat",'w')    
-    
-    natom = 0
-    types =  []
-    elements = []
-    ntypat = 0
-    typat = []
-    t0 = 0
-    style=""
-    
-    
-    while True : 
-        line=fl.readline()
-        if not line : 
-            break
-        line = line.strip()
-        
-        if line == "Reading data file ...":
-            line=fl.readline().strip().split()
-            acellx = float(line[7].strip('('))-float(line[3].strip('('))
-            acelly = float(line[8].strip('('))-float(line[4].strip('('))
-            acellz = float(line[9].strip(')'))-float(line[5].strip(')'))
-        elif line == "# SIMULATION":
-            break
-        else :
-            line = line.split()
-            if line[0] == "timestep":
-                line = fl.readline().strip().split()
-                timestepLog = float(line[1])*1000
-            elif line[0] == "thermo_style":
-                style = line[1]
-                
-
-    while True :
-        line=fl.readline()
-        if not line : 
-            break
-        line = line.strip().split()
-        if len(line)>0 and line[0]=="group":
-            elements.append(line[1].split("_")[0])
-            line = fl.readline().strip().split()
-            types.append(int(line[0]))
-            natom+=types[-1]
-            typat+=[ntypat for _ in range(types[-1])]
-            ntypat+=1
-        if len(line)>2 and line[0] == "Per" and line[1] == "MPI" and line[2] == "rank":
-            if style == "one":
-                Variables = fl.readline().strip().split()
-                IEindex = None
-                Enthindex = None
-                Tempindex = None
-                Pressindex = None
-                for i in range(len(Variables)) : 
-                    v=Variables[i]
-                    if v == "Temp":
-                        Tempindex = i
-                    elif v == "Press":
-                        Pressindex = i
-                    elif v == "TotEng":
-                        IEindex = i
-                    elif v =="Enthalpy":
-                        Enthindex = i
-            break
-
-    
-    ff=open(filename,'r')
-    t0=None
-    while True :
-        l = ff.readline()
-        if not l :
-            break
-        line = l.strip().split()
-        if len(line)>1 and line[1]=="Timestep:":
-            if t0 == None :
-                t0=float(line[2])
-            else : 
-                timestepFile = (float(line[2]) - t0)*timestepLog
-                break
-    ff.close()
 
     fa.write("natom "+str(natom)+"\n")
     fa.write("ntypat "+str(ntypat)+"\n")
@@ -138,28 +244,39 @@ def main(argv):
     Enth = '0'
     Press = '0'
     Temp = '0'
-
+        
     ff=open(filename,'r')
+    fl=open(logname,'r')
+    
+    logline = fl.readline().strip().split()
+    while len(logline)<3 or logline[0] != "Per" or logline[1] != "MPI" or logline[2] != "rank":
+        logline = fl.readline().strip().split()
+    logline = fl.readline().strip().split()
+    
     if press :
         fall=open(allname,'r')
-    
     while True :
         line = ff.readline()
         if not line :
             break
         line = line.strip().split()
-        if line[0] == "Atoms.":
-            string="timestep "+str(timestepFile)+" fs\n"
-            fa.write(string)
-            string = "time "+str(float(line[2])*timestepLog)+" fs\n"
-            fa.write(string)
-            logline = fl.readline().strip().split()
-            
-            if style == "one":         
-                while logline[0] != line[2]:
-                    logline = fl.readline().strip().split()
-                    if not logline : 
-                        break
+        if len(line)>0 and (line[0] == "Atoms." or (line[0]=="ITEM:" and line[1]=="TIMESTEP")):
+            if dumpstyle=='MINI':
+                string="timestep "+str(timestepFile)+" fs\n"
+                fa.write(string)
+                string = "time "+str(float(line[2])*timestepLog)+" fs\n"
+                fa.write(string)
+            elif dumpstyle=='ITEMS':
+                line = ff.readline().strip().split()
+                string="timestep "+str(timestepFile)+" fs\n"
+                fa.write(string)
+                string = "time "+str(float(line[0])*timestepLog)+" fs\n"
+                fa.write(string)
+                while(len(line)<2 or line[1]!="ATOMS"):
+                    line = ff.readline().strip().split()
+
+            if style == "one" or style == "custom":         
+                logline = fl.readline().strip().split()
                 if Tempindex != None :
                     Temp = logline[Tempindex]
                 if Pressindex != None :
@@ -170,10 +287,6 @@ def main(argv):
                     IE = logline[IEindex]
 
             elif style == "multi":
-                while logline[2] != line[2]:
-                    logline = fl.readline().strip().split()
-                    if not logline : 
-                        break
                 logline = fl.readline().strip().split()
                 IE = logline[2]
                 Temp = logline[8]
@@ -181,13 +294,15 @@ def main(argv):
                 logline = fl.readline().strip().split()
                 logline = fl.readline().strip().split()
                 Press = str(float(logline[8])/10000)
+                logline = fl.readline().strip().split()
+
             
             rprimVecs = np.array([[1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,1.0]])
             cellVecs = [np.array([1.0,0.0,0.0])*acellx,np.array([0.0,1.0,0.0])*acellx,np.array([0.0,0.0,1.0])*acellx]
                 
             rprimVecsstr=["  ".join(str(el) for el in vec) for vec in rprimVecs]
             cellVecsstr=["  ".join(str(el) for el in vec) for vec in cellVecs]
-                
+            acell=[acellx,acelly,acellz]
             acellLine = "acell "+str(acellx)+" "+str(acelly)+" "+str(acellz)+" A\n"
             rLines ="rprim_a "+rprimVecsstr[0] +" \nrprim_b "+ rprimVecsstr[1] + " \nrprim_c " +rprimVecsstr[2]+ " \n"
             rdLines ="rprimd_a "+cellVecsstr[0] +" A\nrprimd_b "+ cellVecsstr[1] + " A\nrprimd_c " +cellVecsstr[2]+ " A\n"
@@ -213,18 +328,80 @@ def main(argv):
             fa.write(acellLine)
             fa.write(rLines)
             fa.write(rdLines)            
+            fa.write("atoms: reduced*3 cartesian*3(A) abs.diff.*3(A) velocity*3(A/fs) force*3(ev/A) \n")
             
-            
-            string = "atoms: reduced*3 cartesian*3(A) abs.diff.*3(A)\n"
-            fa.write(string)
-            for at in range(natom):
-                line = ff.readline()
-                line = line.strip().split()
-                x,y,z = float(line[1]),float(line[2]),float(line[3])
-                redx,redy,redz = x/acellx,y/acelly,z/acellz
-                string = str(redx)+" "+str(redy)+" "+str(redz)+" "+str(math.fmod(acellx+x,acellx))+" "+str(math.fmod(acelly+y,acelly))+" "+str(math.fmod(acellz+z,acellz))+" "+str(x)+" "+str(y)+" "+str(z)
-                fa.write(string+"\n")
-            
+            if(dumpstyle=='ITEMS'):
+                if PresList[-1]==1 :
+                    posId = PosList.index(15)
+                    StrList=["" for _ in range(natom)]
+                    for at in range(natom):
+                        string=""
+                        line = ff.readline()
+                        line = line.strip().split()
+                        CoordsLine=['0.0' for _ in range(15)]
+                        ind=0
+                        for coord in line :
+                            if PosList[ind]!=-1:
+                                if ind!=posId :
+                                    CoordsLine[PosList[ind]]=coord
+                                else:
+                                    atom=int(coord)
+                            ind+=1
+                        
+                        if PresList[3]!=0 and PresList[0]==0:
+                            for i in range(3):
+                                CoordsLine[i]=str(round(float(CoordsLine[3+i])/acell[i],5))
+                        
+                        if PresList[3]!=0 and PresList[6]==0:
+                            for i in range(3):
+                                CoordsLine[6+i]=CoordsLine[3+i]
+                        
+                        if PresList[0]!=0 and PresList[3]==0:
+                            for i in range(3):
+                                CoordsLine[3+i]=str(round(float(CoordsLine[i])*acell[i],5))
+                
+                        if PresList[0]!=0 and PresList[6]==0:
+                            for i in range(3):
+                                CoordsLine[6+i]=str(round(float(CoordsLine[i])*acell[i],5))
+                            
+                
+                        for i in range(15):
+                            string+=CoordsLine[i]+" "
+                        StrList[atom-1]=string+"\n"
+                    
+                    for at in range(natom):
+                        fa.write(StrList[at])
+                                        
+                else:
+                    for at in range(natom):
+                        string=""
+                        line = ff.readline()
+                        line = line.strip().split()
+                        CoordsLine=['0.0' for _ in range(15)]
+                        ind=0
+                        for coord in line :
+                            CoordsLine[PosList[ind]]=coord
+                            ind+=1
+                        if(PresList[0]==0):
+                            for i in range(3):
+                                CoordsLine[i]=str(round(float(CoordsLine[3+i])/acell[i],5))
+                        if(PresList[6]==0):
+                            for i in range(3):
+                                CoordsLine[6+i]=CoordsLine[3+i]
+                        for i in range(15):
+                            string+=CoordsLine[i]+" "
+                    
+                        fa.write(string+"\n")
+    
+            elif dumpstyle=='MINI':
+                for at in range(natom):
+                    line = ff.readline()
+                    line = line.strip().split()
+                    x,y,z = round(float(line[1]),5),round(float(line[2]),5),round(float(line[3]),5)
+                    redx,redy,redz = round(x/acellx,5),round(y/acelly,5),round(z/acellz,5)
+                    string = str(redx)+" "+str(redy)+" "+str(redz)+" "+str(round(math.fmod(acellx+x,acellx),5))+" "+str(round(math.fmod(acelly+y,acelly),5))+" "+str(round(math.fmod(acellz+z,acellz),5))+" "+str(x)+" "+str(y)+" "+str(z)+" 0.0 0.0 0.0 0.0 0.0 0.0"
+                    fa.write(string+"\n")
+                
             fa.write("\n")
     
     ff.close()

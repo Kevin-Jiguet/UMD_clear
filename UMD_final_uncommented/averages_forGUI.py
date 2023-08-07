@@ -25,14 +25,15 @@ def main(argv):
     stdev = 0 
     variance = 0 
     anchor=''
+    MaxStep=None
     try:
-        opts, arg = getopt.getopt(argv,"hf:p:s:",["fFileName","pPattern","sSkipSteps"])
+        opts, arg = getopt.getopt(argv,"hf:p:s:m:",["fFileName","pPattern","sSkipSteps","mMaxStep"])
     except getopt.GetoptError:
-        print('average.py -f <FileName> -p <Pattern> -s <SkipSteps> ')
+        print('average.py -f <FileName> -p <Pattern> -s <SkipSteps> -m <MaxStep>')
     for opt, arg in opts:
         if opt == '-h':
             print('average.py program to extract and average numerical values')
-            print('average.py -f <FileName> -p <Pattern> -s <SkipSteps>')
+            print('average.py -f <FileName> -p <Pattern> -s <SkipSteps> -m <MaxStep>')
             sys.exit()
         elif opt in ("-f", "--fFileName"):
             FileName = str(arg)
@@ -41,6 +42,10 @@ def main(argv):
             anchor=Pattern.split()[0]
         elif opt in ("-s", "--sSkipSteps"):
             SkipSteps = int(arg)
+        elif opt in ("-m", "--mMaxStep"):
+            MaxStep = int(arg)
+
+
     if(anchor==''):
         raise Ex('No parameter given ; no mean calculated. Use -p to specify a parameter.')
     if os.path.isfile(FileName): 
@@ -51,7 +56,12 @@ def main(argv):
         (MyCrystal,TimeStep) = umdpf.Crystallization(FileName)
         patternsstr=patterns.decode()
         greps=patternsstr.split('\n')
-        for isteps in range(SkipSteps+1,len(greps)):
+        unit=None
+        if MaxStep ==None :
+            imax = len(greps)
+        else:
+            imax = min(MaxStep,len(greps))
+        for isteps in range(SkipSteps+1,imax):
             elems=greps[isteps].split()
             for ii in range(len(elems)):
                 if elems[ii] == anchor:
@@ -59,12 +69,14 @@ def main(argv):
                         if is_number(elems[jj]):
                             data.append(float(elems[jj]))
                             break
+                if unit==None:
+                    unit=elems[-1]
         average = sum(data)/len(data)
         for ii in range(len(data)):
             variance = variance + (data[ii]-average)**2
         variance = variance/len(data)
         stdev = numpy.sqrt(variance)
-        return data,average,variance,stdev,TimeStep
+        return data,average,variance,stdev,TimeStep,unit
         print('Averages over ',len(data),' ares: mean = ',average,' variance = ', variance, ' stdev = ', stdev)
     else:
         raise Ex('File not found')

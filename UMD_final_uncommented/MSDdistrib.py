@@ -34,8 +34,9 @@ def mean_MSD(msd,instants):
 
 def main(argv):    
     nData = 20
+    nCores=None
     try:
-        opts, arg = getopt.getopt(argv,"hf:n:a:",["fumdfile","nnData","aAxes"])
+        opts, arg = getopt.getopt(argv,"hf:n:a:k:",["fumdfile","nnData","aAxes","knCores"])
     except getopt.GetoptError:
         print ('')
         sys.exit(2)
@@ -48,6 +49,8 @@ def main(argv):
             nData = int(arg)
         elif opt in "-a":
             Axes = eval(arg)
+        elif opt in "-k":
+            nCores=int(arg)
 
     vectors = []
     Thetas = []
@@ -61,10 +64,14 @@ def main(argv):
         v = math.cos(theta)*A1+math.sin(theta)*A2
         vectors.append(v)
         mat+=list(v)
-        Thetas.append(theta)
+        Thetas.append(theta/math.pi)
         
-    
-    [msdfile,MSD,Instants,Elements,Axes] = msd_umd_fast.main(["-f",File,"-z","10","-m","elements","-a",str(mat)])
+    args=["-f",File,"-z","10","-m","elements","-a",str(mat)]
+
+    if nCores!=None:
+        args+=["-k",str(nCores)]
+        
+    [msdfile,MSD,Instants,Elements,Axes] = msd_umd_fast.main(args)
 
     MSDsEl = [[] for _ in range(len(Elements))]
     for el in range(len(Elements)):
@@ -78,7 +85,7 @@ def main(argv):
             coeff/=len(Instants)-1
             MSDsEl[el].append(coeff)
                                         
-    return Thetas, MSDsEl , Elements
+    return Thetas, MSDsEl , Elements, msdfile
         
 if __name__ == "__main__":
     main(sys.argv[1:])

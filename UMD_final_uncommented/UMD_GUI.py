@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import sys
 import scipy
 import numpy as np
@@ -11,6 +8,7 @@ import LAMMPSParser_Standard
 import vibr_spectrum_umd_fast
 import umd_to_lammps
 import gofr_umd
+import Extract_umd
 #import analyze_gofr_forGUI
 import msd_umd_fast
 import viscosity_new
@@ -47,6 +45,13 @@ def usefunction(funct,argv,message):#used to call a function outside this script
         message.setText("The error : < "+str(e)+" > has occured. Please check the validity of the file and arguments you provided.")
         return False
 
+def setGraph(self,layout):
+    self.display_layout=layout
+    self.display_widget.deleteLater()
+    self.display_widget=QWidget()
+    self.display_widget.setLayout(self.display_layout)
+    self.Graph_tab.insertTab(0,self.display_widget,"Visual display")
+    self.Graph_tab.setCurrentIndex(0)
 
 def clearLayout(layout):#Clears the layout to display the next graphs
     while layout.count():
@@ -59,10 +64,26 @@ def clearLayout(layout):#Clears the layout to display the next graphs
                 if item_int.widget():
                     item_int.widget().deleteLater()
 
-def createMSD_graph(MSD,Instants,layout,Elements,axes=None):
+def create_display_layout(layout,mode="grid",ncol=3,nrow=3):    
     clearLayout(layout)
+    if mode=="grid":
+        layout = QGridLayout()
+        layout.setContentsMargins(0,0,0,0)
+        
+        for i in range(ncol):            
+            for j in range(1,nrow+1):
+                layout.setColumnStretch(i,j)
+            
+    elif mode=="full":
+        layout=QVBoxLayout()        
+        
+    return layout
+    
+def createMSD_graph(self,MSD,Instants,Elements,axes=None):
     n = len(Elements)
     ncol=int((n+1)/3)
+    layout=create_display_layout(self.display_layout,'grid',ncol,int((n-1)/ncol))
+
     Title = QLabel("x : time ; y : msd (A²)")
     Title.setStyleSheet("font-size: 16px;")
     layout.addWidget(Title,0,0)
@@ -72,17 +93,18 @@ def createMSD_graph(MSD,Instants,layout,Elements,axes=None):
         layout_int = QVBoxLayout()
         row=int(i/ncol)+1
         col=i%ncol
-        figure = Figure(figsize=(3,3))
+        figure = Figure()
+        figure.subplots_adjust(left=0.1,right=0.9,top=0.85,bottom=0.15)
         ax = figure.add_subplot(111)
 
         if axes != None :
             
-            axes = [round(axes[i],3) for i in range(9)]
             ax.plot(Instants[:],MSD[i][0][:],label = "Total MSD")
-            ax.plot(Instants[:],MSD[i][1][:],label = "Axis 1 : "+str(axes[:3]))
-            ax.plot(Instants[:],MSD[i][2][:],label = "Axis 2 : "+str(axes[3:6]))
-            ax.plot(Instants[:],MSD[i][3][:],label = "Axis 3 : "+str(axes[6:]))
-                        
+
+            axes = [round(axes[i],3) for i in range(len(axes))]
+
+            for n in range(int(len(axes)/3)):
+                ax.plot(Instants[:],MSD[i][i][:],label = "Axis "+str(n)+" : "+str(axes[3*n:3*(n+1)]))
         else :
             
             ax.plot(Instants[:],MSD[i][0])
@@ -100,44 +122,44 @@ def createMSD_graph(MSD,Instants,layout,Elements,axes=None):
     SaveButton.clicked.connect(partial(SaveFunction,FigList,Elements))
     
     layout.addWidget(SaveButton)
+    
+    setGraph(self,layout)
 
 
-def createavg_graph(data,firststep,TimeStep,layout,parameter):
-    clearLayout(layout)
+def createavg_graph(self,data,firststep,TimeStep,unit,parameter):
+    layout = create_display_layout(self.display_layout,'full')
     X = [(firststep+i)*TimeStep for i in range(len(data))]
     figure=Figure()
-    Title = QLabel("Mean "+parameter+" as a function of time (fs)")
-    Title.setStyleSheet("font-size: 16px;")
-    Title.setFixedSize(500,20)
+    Title = "Mean "+parameter+" ("+unit+") "+"as a function of time (fs)"
+#    Title.setStyleSheet("font-size: 16px;")
+#    Title.setFixedSize(500,20)
     ax=figure.add_subplot(111)
     ax.plot(X,data)
+    ax.set_title(Title)
     figure.tight_layout()
     canvas=FigureCanvas(figure)
-    layout.addWidget(Title,0,0)
-    layout.addWidget(canvas,1,0)
+    layout.addWidget(canvas)
     SaveButton = QPushButton("Save")
     SaveButton.clicked.connect(partial(SaveFunction,[figure],[""]))
     layout.addWidget(SaveButton)
-
-    
+    setGraph(self,layout)
             
-def creategraph_visc(Tau,Visc,layout):#Creates the viscosity graph
-    clearLayout(layout)
+def creategraph_visc(self,Tau,Visc):#Creates the viscosity graph
+    layout = create_display_layout(self.display_layout,"full")
     figure=Figure(figsize=(10,10))
-    Title = QLabel("Mean viscosity in Pa*s as a function of lag time (fs)")
-    Title.setStyleSheet("font-size: 16px;")
-    Title.setFixedSize(500,20)
+    Title = "Mean viscosity (Pa*s) as a function of lag time (fs)"
     ax=figure.add_subplot(111)
     ax.plot(Tau,Visc)
+    ax.set_title(Title)
     figure.tight_layout()
+    figure.subplots_adjust(left=0.1,right=0.9,top=0.85,bottom=0.15)
     canvas=FigureCanvas(figure)
-    layout.addWidget(Title,0,0)
-    layout.addWidget(canvas,1,0)
+    layout.addWidget(canvas)
 
     SaveButton = QPushButton("Save")
     SaveButton.clicked.connect(partial(SaveFunction,[figure],[""]))    
     layout.addWidget(SaveButton)
-
+    setGraph(self,layout)
 
 def read_visc(viscfile):#Reads the viscosity file
     ff=open(viscfile,"r")
@@ -156,9 +178,11 @@ def read_visc(viscfile):#Reads the viscosity file
     
     return Tau,Visc
 
-def createhist_vib(DOS,Freq,Elements,layout,types,limF = "None",wl = "None",OrigDOS = None):#Creates the histograms of vibrational spectrum
-    clearLayout(layout)
+def createhist_vib(self,DOS,Freq,Elements,types,limF = "None",wl = "None",OrigDOS = None):#Creates the histograms of vibrational spectrum
     
+    #print(DOS)
+    #print(len(DOS),len(DOS[0]))
+    layout=create_display_layout(self.display_layout,'grid')
     if OrigDOS == None :
         OrigDOS = DOS
     
@@ -171,11 +195,9 @@ def createhist_vib(DOS,Freq,Elements,layout,types,limF = "None",wl = "None",Orig
                 break
     
     n = len(Elements)
-    print(types)
     natom = sum(types)
     types.append(natom)
     ncol=int((n+3.5)/3)
-    print("ncol",ncol)
     #Title = QLabel("x : DOS of vib.spectrum ; y : wavenumber (cm⁻¹)")
     #Title.setStyleSheet("font-size: 16px;")
     #layout.addWidget(Title,0,0)    
@@ -235,7 +257,7 @@ def createhist_vib(DOS,Freq,Elements,layout,types,limF = "None",wl = "None",Orig
     BoxFilt.setSizeConstraint(QHBoxLayout.SetFixedSize)
 
     FilterButton = QPushButton("Display the DOS with these parameters")
-    FilterButton.clicked.connect(partial(FilterFunction,OrigDOS,WindowLength,Freq,Elements,layout,types[:-1],FreqCut,message))
+    FilterButton.clicked.connect(partial(FilterFunction,self,OrigDOS,Freq,Elements,types[:-1],FreqCut,WindowLength,message))
     
     layout_buttons.addLayout(BoxFreq)
     layout_buttons.addLayout(BoxFilt)    
@@ -249,54 +271,92 @@ def createhist_vib(DOS,Freq,Elements,layout,types,limF = "None",wl = "None",Orig
 
     
     layout.addWidget(container,n%ncol+1,ncol-1)
-    
 
+    setGraph(self,layout)
 
-def FilterFunction(DOS,WindowsLength,Freq,Elements,layout,types,Fcut,message):
+def FilterFunction(self,DOS,Freq,Elements,types,Fcut,WindowsLength,message):
+   
     DOSfiltered=[]
     flagCalc = True
     WL = WindowsLength.text()
     if WL.isdigit() or WL=="None":
         if WL != "None":
             if int(WL)>3:
-                for subDOS in DOS:
-                    DOSfiltered.append(scipy.signal.savgol_filter(np.array(subDOS),int(WL),3))
-            else : 
-                message.setText("Error : the Window Length must be at least equal to 3.")
-                flagCalc = False
-        else :
-            DOSfiltered = DOS
+                if int(WL)<=len(Freq):
+                    for subDOS in DOS:
+                        DOSfiltered.append(scipy.signal.savgol_filter(np.array(subDOS),int(WL),3))
 
+                else:
+                    message.setText("Error : the Window Length was set to "+str(WL)+", but must not be bigger than "+str(len(Freq))+" (data's length)")
+                    WindowsLength.setText("None")
+                    flagCalc=False
+            else : 
+                message.setText("Error : the Window Length was set to "+str(WL)+", but must be at least equal to 3.")
+                WindowsLength.setText("None")
+                flagCalc = False
+                
+        elif Fcut.text()!="None" :
+            DOSfiltered = DOS
+        else:
+            flagCalc=False
+            
         if flagCalc and isfloat(Fcut.text()):
-            createhist_vib(DOSfiltered,Freq,Elements,layout,types,float(Fcut.text()),WL,DOS)
+            createhist_vib(self,DOSfiltered,Freq,Elements,types,float(Fcut.text()),WL,DOS)
         elif flagCalc :
             Fcut.setText("None")
-            createhist_vib(DOSfiltered,Freq,Elements,layout,types,"None",WL,DOS)
-               
+            createhist_vib(self,DOSfiltered,Freq,Elements,types,"None",WL,DOS)
+        
     else :
         
         message.setText("Error : the window length must be an integer>3 or 'None'.")        
+
+
+def displayVar(self, Val,X,title="",xvar="",yvar="",yunit="",timestep=1):
+    
+    layout=create_display_layout(self.display_layout,'full')
+    figure = Figure()
+    ax = figure.add_subplot()
+    
+    ax.plot([timestep*t for t in X],Val)
+#    ax.legend()
+    ax.set_xlim(left=X[0])
+    ax.set_xlabel("time ("+xvar+")")
+    ax.set_ylabel(yvar+" ("+yunit+")")
+#    ax.set_ylim(bottom=0)
+    Title = QLabel(title)
+    Title.setStyleSheet("font-size: 16px")
+    Title.setFixedSize(500,20)
+
+    canvas = FigureCanvas(figure)
+    
+    layout.addWidget(Title)
+    layout.addWidget(canvas)
+    setGraph(self,layout)
         
-def displaydistrib(Thetas,MSDsEl,Elements,Axes,layout):
+    
+def displaydistrib(self,Thetas,MSDsEl,Elements,Axes):
     A1 = Axes[:3]
     A2 = Axes[3:]
     
-    clearLayout(layout)
+    layout=create_display_layout(self.display_layout,"full")
     
     figure = Figure()
     ax = figure.add_subplot(111)
     for el in range(len(Elements)):
         ax.plot(Thetas,MSDsEl[el],label = Elements[el])
+        
     ax.legend()
-    
+    ax.set_xlabel("Angular fraction")
+    ax.set_ylabel("MSD")
     Title = QLabel("Axes : "+str(A1)+", "+str(A2))
     Title.setStyleSheet("font-size: 16px")
     Title.setFixedSize(500,20)
     
     canvas = FigureCanvas(figure)
     
-    layout.addWidget(Title,0,0)
-    layout.addWidget(canvas,1,0)
+    layout.addWidget(Title)
+    layout.addWidget(canvas)
+    setGraph(self,layout)    
 
 def SaveFunction(ListFig,ListTitles):
 
@@ -308,13 +368,16 @@ def SaveFunction(ListFig,ListTitles):
     def save():
         name = Name.text()
         for i in range(len(ListFig)) :
-            ListFig[i].savefig(name+"_"+ListTitles[i], format='png')
+            if ListTitles[i]!="":
+                ListFig[i].savefig(name+"_"+ListTitles[i], format='png')
+            else:
+                ListFig[i].savefig(name, format='png')
             
         nameWidget.setVisible(False)
     
     saveForRealButton.clicked.connect(save)
     
-    saveLayout.addWidget(QLabel("Enter the base for the names of the file(s) to be saved :"))
+    saveLayout.addWidget(QLabel("Enter the base for the name(s) of the file(s) to be saved :"))
     saveLayout.addWidget(Name)
     saveLayout.addWidget(saveForRealButton)
     
@@ -387,9 +450,12 @@ class MainWindow(QMainWindow):
         convert_layout.addWidget(convert_tab)
         convert_widget.setLayout(convert_layout)
         
-        self.display_widget=QWidget()
-        self.create_display_layout()
-        
+        self.Graph_widget=QWidget()
+        self.Graph_layout=QVBoxLayout()
+        self.Graph_tab=QTabWidget()
+        self.Graph_layout.addWidget(self.Graph_tab)
+        self.Graph_widget.setLayout(self.Graph_layout)
+                
         operations_widget=QWidget()
         operations_layout=QVBoxLayout()
         operations_tab=QTabWidget()
@@ -402,8 +468,6 @@ class MainWindow(QMainWindow):
         calculations_layout.addWidget(calculations_tab)
         calculations_widget.setLayout(calculations_layout)
 
-        
-        
         # Création des onglets
         analyze_gofr_widget = QWidget()
         UMD_widget = QWidget()
@@ -420,6 +484,10 @@ class MainWindow(QMainWindow):
         poscar_widget = QWidget()
         xyz_widget = QWidget()
         msd_dist_widget = QWidget()
+        displayVar_widget = QWidget()
+        self.display_widget=QWidget()
+        
+
 
         # Ajout des onglets au widget à onglets
         convert_tab.addTab(UMD_widget, "VASP to UMD")
@@ -433,15 +501,15 @@ class MainWindow(QMainWindow):
         operations_tab.addTab(Speciation_widget, "Population")
         calculations_tab.addTab(Vibration_widget,"Vibrational spectrum")
         calculations_tab.addTab(viscosity_widget,"Viscosity parameters")
-        calculations_tab.addTab(msd_widget,"Mean square deviation")
+        calculations_tab.addTab(msd_widget,"MSD")
         calculations_tab.addTab(avg_widget, "Average parameters")
+        calculations_tab.addTab(displayVar_widget, "Parameters of UMD")
         calculations_tab.addTab(msd_dist_widget, "MSD distribution")
-        
+        self.Graph_tab.addTab(self.display_widget,"Visual Display")
+        self.Graph_tab.addTab(displayVar_widget,"UMD variables")
 
         # Création du contenu des onglets
         self.create_Vibration_layout(Vibration_widget)
-        #self.create_Viscosity_layout(Viscosity_widget)
-        #self.create_msd_layout(msd_widget)
         self.create_avg_layout(avg_widget)
         self.create_UMD_layout(UMD_widget)
         self.create_LAMMPS_layout(LAMMPSParser_widget)
@@ -455,25 +523,18 @@ class MainWindow(QMainWindow):
         self.create_poscar(poscar_widget)
         self.create_xyz(xyz_widget)
         self.create_msddistrib(msd_dist_widget)
+        self.create_displayVar(displayVar_widget)
+        self.display_layout=QVBoxLayout()
+        create_display_layout(self.display_layout)
+        self.display_widget.setLayout(self.display_layout)
+
         # Définition du widget à onglets comme widget central de la fenêtre principale
         main_tab.addTab(convert_widget,"Conversions")
         main_tab.addTab(operations_widget,"Operations : file creation")
         main_tab.addTab(calculations_widget,"Calculations")
-        main_tab.addTab(self.display_widget,"Visual display")
+        main_tab.addTab(self.Graph_widget,"Graphics")
         self.setCentralWidget(main_tab)
 
-
-    def create_display_layout(self):
-        
-        self.display_layout = QGridLayout()
-        self.display_layout.setContentsMargins(0,0,0,0)
-    
-        self.display_layout.setColumnStretch(0,1)
-        self.display_layout.setColumnStretch(1,1)
-        self.display_layout.setColumnStretch(2,1)
-
-    
-        self.display_widget.setLayout(self.display_layout)
 
 
     def create_msddistrib(self,tab_widget):
@@ -487,6 +548,12 @@ class MainWindow(QMainWindow):
         SelectButton = QPushButton("Select an umd file")
         SelectButton.clicked.connect(partial(select_File,self.MSDdistFile))
         
+        self.MSDdistCoresBox = QCheckBox("Precise the number of cores to be used for the parallelization")        
+        self.MSDdistCores = QLineEdit("")
+        self.MSDdistCores.setMaximumWidth(50)
+        self.MSDdistCores.setVisible(False)
+        self.MSDdistCoresBox.stateChanged.connect(self.MSDdistCoresBoxchange)
+
         self.nVecs = QLineEdit("20")
         
         self.D00 = QLineEdit("1")
@@ -534,6 +601,8 @@ class MainWindow(QMainWindow):
         layout.addItem(QSpacerItem(0,75))
         layout.addLayout(vBoxAxExp)
         layout.addItem(QSpacerItem(0,75))
+        layout.addWidget(self.MSDdistCoresBox)
+        layout.addWidget(self.MSDdistCores)
         layout.addWidget(ComputeButton)    
         layout.addWidget(self.MSDdist_message)
         
@@ -544,14 +613,21 @@ class MainWindow(QMainWindow):
         if os.path.isfile(self.MSDdistFile.text()) :
             if self.nVecs.text().isnumeric():
                 if isfloat(self.D00.text()) and isfloat(self.D01.text()) and isfloat(self.D02.text()) and isfloat(self.D10.text()) and isfloat(self.D11.text()) and isfloat(self.D12.text()) :            
-                    Axes = [float(self.D00.text()),float(self.D01.text()),float(self.D02.text()),float(self.D10.text()),float(self.D11.text()),float(self.D12.text())]
-                    argv = ["-f",self.MSDdistFile.text(),"-n",self.nVecs.text(),"-a",str(Axes)]
-                    res = usefunction(MSDdistrib, argv, self.MSDdist_message)
-                
-                    if res != False :
-                        Theta,MSDEl,Elements = res
-                        displaydistrib(Theta,MSDEl,Elements,Axes,self.display_layout)
-
+                    if(self.MSDdistCoresBox.isChecked() and self.MSDdistCores.text().isnumeric()) or (not self.MSDCoresBox.isChecked()):
+                    
+                        Axes = [float(self.D00.text()),float(self.D01.text()),float(self.D02.text()),float(self.D10.text()),float(self.D11.text()),float(self.D12.text())]
+                        argv = ["-f",self.MSDdistFile.text(),"-n",self.nVecs.text(),"-a",str(Axes)]
+                        if self.MSDdistCoresBox.isChecked() :
+                            argv+=["-k",self.MSDdistCores.text()]
+                            
+                        res = usefunction(MSDdistrib, argv, self.MSDdist_message)
+                    
+                        if res != False :
+                            Theta,MSDEl,Elements,file = res
+                            displaydistrib(self,Theta,MSDEl,Elements,Axes)
+                            self.MSDdist_message.settext("distribution of MSD successfully calculated and graphically displayed.\nData stored in file : "+file)
+                    else :
+                        self.MSDdist_message.setText("Error : the number of cores has to be a strictly positive integer.")
                 else :
                     self.MSDdist_message.setText("Error : all the values for Axis 1 and 2 must be integer or float. Please check the values you provided.")
             else :
@@ -559,6 +635,11 @@ class MainWindow(QMainWindow):
         else :
             self.MSDdist_message.setText("Error : file "+self.MSDdistFile.text()+" is displaced or missing.")
 
+    def MSDdistCoresBoxchange(self,state):
+        if state ==2 :
+            self.MSDdistCores.setVisible(True)
+        else :
+            self.MSDdistCores.setVisible(False)
             
     
     def create_poscar(self,tab_widget):
@@ -703,10 +784,16 @@ class MainWindow(QMainWindow):
         argv=["-f",self.avgUMD_edit.text(),"-p",self.select_parameter.text()]
         flag=1
         if self.select_init.text().isnumeric():
-            firststep = int(self.select_init.text())
+            argv+=["-s",self.select_init.text()]
         else :
             self.avg_message.setText("The initial step must be specified and set to a strictly positive integer value.")
             flag=0
+            
+        if self.select_last.text() != "max":
+            if isfloat(self.select_last.text()):
+                argv+=["-m",self.select_last.text()]
+            else:
+                self.select_last.setText("max")
             
         if (not self.select_last.text().isnumeric()) and self.select_last.text()!="max":
             self.avg_message.setText("The last step must be specified and set to a strictly positive integer value (or keyword max).")
@@ -720,16 +807,72 @@ class MainWindow(QMainWindow):
                 
                 res = usefunction(averages_forGUI,argv,self.avg_message)
                 if res!=False :
-                    data,average,variance,stdev,TimeStep=res
+                    data,average,variance,stdev,TimeStep,unit=res
                     if self.select_last.text() == "max": 
-                        self.select_last.setText(str(len(data)))
-
-                    laststep = int(self.select_last.text())
-                    createavg_graph(data[firststep:laststep],firststep,TimeStep,self.display_layout,self.select_parameter.text())
-                
-                    self.avg_message.setText("Average "+self.select_parameter.text()+" calculated and graphically displayed (see the Visual Display tab above)\nAverage "+self.select_parameter.text()+" : "+str(average)+"\nVariance : "+str(variance)+"\nStandart deviation : "+str(stdev))
+                        self.select_last.setText(str(len(data)+int(self.select_init.text())))
+                    createavg_graph(self,data[int(self.select_init.text()):int(self.select_last.text())],int(self.select_init.text()),TimeStep,unit,self.select_parameter.text())
+                    self.avg_message.setText("Average "+self.select_parameter.text()+" calculated. Evolution graphically displayed. \nAverage "+self.select_parameter.text()+" : "+str(average)+"\nVariance : "+str(variance)+"\nStandard deviation : "+str(stdev))
+                    
             else :
                self.avg_message.setText("Error : the UMD file "+self.avgUMD_edit.text()+" is displaced or missing. Pleace check the path or the file name.")
+
+    def create_displayVar(self,tab_widget):
+        layout = QVBoxLayout()
+        self.umdfile_disp = QLineEdit("")
+        selectButton=QPushButton("Select file")
+        self.TempButton=QRadioButton("Temperature")
+        self.EnButton=QRadioButton("Internal Energy")
+        self.PressButton=QRadioButton("Pressure")
+        buttongroup=QButtonGroup()
+        computeButton = QPushButton("Display")
+        self.displaymessage=QLabel("")
+        
+        selectButton.clicked.connect(partial(select_File,self.umdfile_disp))
+        buttongroup.addButton(self.TempButton)
+        buttongroup.addButton(self.EnButton)
+        buttongroup.addButton(self.PressButton)
+        computeButton.clicked.connect(self.display_var)
+        
+                
+        
+        layout.addWidget(self.umdfile_disp)
+        layout.addWidget(selectButton)
+        layout.addWidget(self.TempButton)
+        layout.addWidget(self.EnButton)
+        layout.addWidget(self.PressButton)
+        layout.addWidget(computeButton)
+        layout.addWidget(self.displaymessage)
+        
+        tab_widget.setLayout(layout)
+    
+
+    def display_var(self):
+        if not os.path.isfile(self.umdfile_disp.text()):
+            if self.umdfile_disp.text()=="":
+                self.displaymessage.setText("Please select a file.")
+            else:
+                self.displaymessage.setText("Error : the file "+self.umdfile_disp.text()+" is displaced or missing.")
+        else:
+            argv=["-f",self.umdfile_disp.text()]
+            arg=None
+            if self.TempButton.isChecked():
+                arg="Temperature"
+            elif self.PressButton.isChecked():
+                arg="Pressure"
+            elif self.EnButton.isChecked():
+                arg="InternalEnergy"
+            else:
+                self.displaymessage.setText("Please select a parameter.")
+           
+            argv+=["-p",arg]
+            if arg!=None:
+                res=usefunction(Extract_umd, argv, self.displaymessage)        
+                if res !=False:
+#                self.create_display_layout()
+                    [Var,Times,unit,tunit,timestep]=res
+                    displayVar(self,Var,Times,xvar=tunit,yvar=arg,yunit=unit,timestep=timestep)
+                    
+                    self.displaymessage.setText(arg+" successfully extracted and graphically shown (see the tab 'Visual Display'")
 
     def create_viscosity_layout(self,tab_widget):
         layout = QVBoxLayout()
@@ -786,7 +929,7 @@ class MainWindow(QMainWindow):
                 Name = self.umdfile_vsc_edit.text().split("/")
                 name = Name[-1][:-8]+".visc.dat"
                 Tab,Visc=read_visc(name)
-                creategraph_visc(Tab,Visc,self.display_layout)
+                creategraph_visc(self,Tab,Visc)
                 self.vscmessage.setText("Viscosity file successfully created under the name "+name+"\nViscosity showed in graphic form (see the tab <Visual Display> above).")
             elif result :
                 Name = self.umdfile_vsc_edit.text().split("/")
@@ -804,6 +947,13 @@ class MainWindow(QMainWindow):
         self.z_msd = QLineEdit("1")
         self.v_msd = QLineEdit("1")
         self.b_msd = QLineEdit("0")
+        
+        
+        self.MSDCoresBox = QCheckBox("Precise the number of cores to be used for the parallelization")        
+        self.MSDCores = QLineEdit("")
+        self.MSDCores.setMaximumWidth(50)
+        self.MSDCores.setVisible(False)
+        self.MSDCoresBox.stateChanged.connect(self.MSDCoresBoxchange)
         
         selectButton.clicked.connect(partial(select_File,self.umdfile_msd_edit))
         computeButton.clicked.connect(self.compute_msd)
@@ -909,6 +1059,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Choose the form of the data to be displayed in the output file :"))
         layout.addItem(QSpacerItem(0,-30))
         layout.addLayout(hboxRB)
+        layout.addWidget(self.MSDCoresBox)
+        layout.addWidget(self.MSDCores)
         layout.addWidget(self.displayMSDbox)
         layout.addItem(QSpacerItem(0,50))
         layout.addWidget(QLabel("Choose the way the msd should be computed :"))
@@ -943,9 +1095,18 @@ class MainWindow(QMainWindow):
             self.displayMSDbox.setVisible(True)
         else :
             self.displayMSDbox.setVisible(False)
+            
+    def MSDCoresBoxchange(self,state):
+        if state ==2 :
+            self.MSDCores.setVisible(True)
+        else :
+            self.MSDCores.setVisible(False)
         
     def compute_msd(self):
-        if not os.path.isfile(self.umdfile_msd_edit.text()):
+        
+        if self.MSDCoresBox.isChecked() and not self.MSDCores.text().isnumeric():
+            self.msdmessage.setText("Error : the number of cores has to be a strictly positive integer")
+        elif not os.path.isfile(self.umdfile_msd_edit.text()):
             self.msdmessage.setText("Error : the UMD file "+self.umdfile_msd_edit.text()+" is displaced or missing. Pleace check the path or the file name.")
         elif not self.z_msd.text().isnumeric() or int(self.z_msd.text())<1:
             self.msdmessage.setText("Error : the horizontal jump must be a strictly positive integer.")
@@ -969,23 +1130,21 @@ class MainWindow(QMainWindow):
                 else :
                     self.msdmessage.setText("Error : each component of the axis vectors must be a float. Please check the values you provided.")
                     Comp = False
+                    
+            if self.MSDCoresBox.isChecked():
+                argv+=["-k",self.MSDCores.text()]
+                
             if Comp :
+                
                 result = usefunction(msd_umd_fast,argv,self.msdmessage)
                 if result!=False :
                     [Name,MSD,Instants,Elements,Axes] = result
-                    message = "msd file successfully created under the name "+Name
+                    message = "MSD file successfully created under the name : "+Name
                     if self.displayMSDbox.isChecked():
-                        createMSD_graph(MSD, Instants, self.display_layout, Elements, axes = Axes)
-                        message += '\n MSD displayed as graphs in the tab "Visual display" above'
+                        self.display_layout=create_display_layout(self.display_layout) 
+                        createMSD_graph(self,MSD, Instants,Elements, axes = Axes)
+                        message += '\nMSD displayed as graphs in the tab "Graph" -> "Visual display"'
                     self.msdmessage.setText(message)        
-    
-    
-    
-    
-    
-    
-    
-        
 
     def create_gofr_layout(self,tab_widget):
         layout = QVBoxLayout()
@@ -1073,6 +1232,7 @@ class MainWindow(QMainWindow):
 
 
 
+
     def create_Vibration_layout(self,tab_widget):
         self.layoutvib = QVBoxLayout()
         
@@ -1136,7 +1296,7 @@ class MainWindow(QMainWindow):
             if result and self.displayVib.isChecked() :
                 self.messageVib.setText("Vibrational spectrum successfully calculated. Files created under the names "+self.UMDfileVib_edit.text()[:-8]+".vels.scf.dat and "+self.UMDfileVib_edit.text()[:-8]+".vibr.dat\nDOS showed in graphs (see the tab <Visual Display> above)")
                 DOS,Freq,Elements = read_vibr_allEls(self.UMDfileVib_edit.text()[:-8]+".vibr.dat")
-                createhist_vib(DOS, Freq, Elements, self.display_layout,types)
+                createhist_vib(self,DOS, Freq, Elements,types)
             elif result :
                 self.messageVib.setText("Vibrational spectrum successfully calculated. Files created under the names "+self.UMDfileVib_edit.text()[:-8]+".vels.scf.dat and "+self.UMDfileVib_edit.text()[:-8]+".vibr.dat")
                 
@@ -1298,6 +1458,12 @@ class MainWindow(QMainWindow):
         
         self.rings_edit.textChanged.connect(self.check_boxes)
         
+        self.SpecCoresBox = QCheckBox("Precise the number of cores to be used for the parallelization")        
+        self.SpecCores = QLineEdit("")
+        self.SpecCores.setMaximumWidth(50)
+        self.SpecCores.setVisible(False)
+        self.SpecCoresBox.stateChanged.connect(self.SpecCoresBoxchange)
+        
         self.umdSpecbutton = QPushButton("Select the matching umd file to compute the angles.")
         self.umdSpecbutton.hide()
         self.umdSpecbutton.clicked.connect(partial(select_File,self.umdfileSpec))
@@ -1322,6 +1488,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.rings_edit)
         layout.addWidget(self.rings)
         layout.addWidget(self.angles)
+        layout.addWidget(self.SpecCoresBox)
+        layout.addWidget(self.SpecCores)
         layout.addItem(QSpacerItem(0,15))
         layout.addWidget(self.umdfileSpec)
         layout.addWidget(self.umdSpecbutton)
@@ -1361,7 +1529,13 @@ class MainWindow(QMainWindow):
             self.umdfileSpec.hide()
             self.umdSpecbutton.hide()
 
+    def SpecCoresBoxchange(self,state):
+        if state ==2 :
+            self.SpecCores.setVisible(True)
+        else :
+            self.SpecCores.setVisible(False)
 
+    
     def compute_speciation(self):
         
         self.specmessage.setText("")
@@ -1373,6 +1547,10 @@ class MainWindow(QMainWindow):
             self.ring=1
         
         compute = True
+
+        if self.SpecCoresBox.isChecked() and not self.SpecCores.text().isnumeric():
+            self.specmessage.setText("Error : the number of cores has to be a strictly positive integer.")
+            compute = False
                     
         if self.outeratom.text()=="":
             self.specmessage.setText("Please select at least one element for the outer atoms.")
@@ -1387,6 +1565,7 @@ class MainWindow(QMainWindow):
         elif not os.path.isfile(self.bondfile.text()):
             self.specmessage.setText("ERROR : the file "+self.bondfile.text()+" is displaced or missing")
             compute = False
+        
 
         if compute :
             if self.angle :
@@ -1400,11 +1579,12 @@ class MainWindow(QMainWindow):
                     compute = False
             else :
                 argv=["-f",self.bondfile.text(),"-c",self.centralatom.text(),"-a",self.outeratom.text(),"-r", self.ring]
+                if self.SpecCoresBox.isChecked():
+                    argv+=["-k",self.SpecCores.text()]
 
  
         if compute :
             result=usefunction(speciation_and_angles,argv,self.specmessage)
-            print("result : ",result)            
             if result == True :
                 self.specmessage.setText("Population file successfully created under the name "+self.bondfile.text().split("/")[-1][:-4]+".r"+str(self.ring)+".popul.dat")
             elif result != False :
@@ -1429,6 +1609,12 @@ class MainWindow(QMainWindow):
         
         self.l_edit = QLineEdit('')
         self.s_edit = QLineEdit('1')
+        
+        self.BondCoresBox = QCheckBox("Precise the number of cores to be used for the parallelization")        
+        self.BondCores = QLineEdit("")
+        self.BondCores.setMaximumWidth(50)
+        self.BondCores.setVisible(False)
+        self.BondCoresBox.stateChanged.connect(self.BondCoresBoxchange)
         
         self.specificBox = QCheckBox("Restrict bonding to a fraction of the cell")
         
@@ -1501,6 +1687,8 @@ class MainWindow(QMainWindow):
         layout.addLayout(hboxBL)
         layout.addItem(QSpacerItem(0,50))
         layout.addLayout(hboxSF)
+        layout.addWidget(self.BondCoresBox)
+        layout.addWidget(self.BondCores)
         layout.addWidget(self.specificBox)
         layout.addWidget(self.specificWidget)
         layout.addItem(QSpacerItem(0,50))
@@ -1529,7 +1717,9 @@ class MainWindow(QMainWindow):
             else :
                 self.bondmessage.setText("Error : the file "+self.inpfile.text()+" is displaced or missing. Please check the path or file name.") 
         elif not(self.s_edit.text().isnumeric()) or int(self.s_edit.text())<1 :        
-            self.bondmessage.setText("The value of the sampling frequency has to be a strictly positive integer.")
+            self.bondmessage.setText("Error : the value of the sampling frequency has to be a strictly positive integer.")
+        elif self.BondCoresBox.isChecked() and not self.BondCores.text().isnumeric():
+            self.bondmessage.setText("Error : the number of cores has to be a strictly positive integer.")
         else :
             if not(isfloat(self.l_edit.text())):
                 argv=["-f",self.umdfileBond.text(),"-s",self.s_edit.text(),"-i",self.inpfile.text()]
@@ -1545,6 +1735,9 @@ class MainWindow(QMainWindow):
                     specList = "["+self.X0.text()+","+self.Y0.text()+","+self.Z0.text()+","+self.X1.text()+","+self.Y1.text()+","+self.Z1.text()+","+"]"
                     argv+=["-p",specList]
                     specified = True
+            if self.BondCoresBox.isChecked():
+                argv+=["-k",self.BondCores.text()]
+
 
             result = usefunction(Bond_fast_specific,argv,self.bondmessage)                    
                 
@@ -1565,7 +1758,11 @@ class MainWindow(QMainWindow):
         else :
             self.specificWidget.setVisible(False)
     
-        
+    def BondCoresBoxchange(self,state):
+        if state ==2 :
+            self.BondCores.setVisible(True)
+        else :
+            self.BondCores.setVisible(False)
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)
