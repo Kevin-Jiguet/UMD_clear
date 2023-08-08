@@ -55,7 +55,7 @@ clust_lib.free_memory_int.restype = None
 clust_lib.free_memory_double.argtypes = [ctypes.POINTER(ctypes.c_double)]
 clust_lib.free_memory_double.restype = None
 
-def analysis_BondLives(BondFile,Centrals,Adjacents,Nsteps,nCores):
+def analysis_BondLives(BondFile,Centrals,Adjacents,Nsteps,nCores):#Creates a dictionary whose entries are the atoms making a given angle, and the values are lists of initial and final times for the lives of this angle
     
     CentIndexes,AdjIndexes,MyCrystal,Bonds,TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps,mode = "Dictionary",nCores=nCores)
 
@@ -110,12 +110,11 @@ def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the ind
         Step+=1
     return population
     
-def compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,OutMin,OutMax,fa,TimeStep,Nsteps):
+def compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,OutMin,OutMax,fa,TimeStep,Nsteps):#Calculates and writes the angles in a file.
     acell=MyCrystal.acell
     TotMean=0
     TotNangles=0
     for step in range(len(Bonds)) :
-#        print("step ",step," on",len(Bonds))
         SnapshotAngles=[]
         SnapshotBonds=Bonds[step]
         MySnapshot=AllSnapshots[step]
@@ -188,7 +187,7 @@ def compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,OutMin,OutMax,fa
     fa.write("\n\n Mean of all angles : "+str(TotMean))
     fa.close()
         
-def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,natom,nAts,CentIndexes,OutIndexes,acell,r,AngleCalc):
+def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,natom,nAts,CentIndexes,OutIndexes,acell,r,AngleCalc):#Create the species from the Bond file
     
     if(100*step//maxSteps != 100*(step-1)//maxSteps):
         sys.stdout.write("\rBuilding species. Progress : "+str(100*step//maxSteps)+"%")        
@@ -215,7 +214,7 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,nat
             Clusters[-1].append(atom)
 
     
-    if r==1 and AngleCalc:
+    if r==1 and AngleCalc:#Calculating the angles within each cluster, as a dictionary whose entries are clusters and values are the angles
         SXp = (ctypes.c_double * len(SnapshotXCart))(*SnapshotXCart)
         Ap = clust_lib.angles(Np,len(Clusters),M,SXp,CIp,int(len(CentIndexes)/2),OIp,int(len(OutIndexes)/2),acell[0],acell[1],acell[2])
         index=0
@@ -230,9 +229,9 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,nat
             else :
                 Angles[str(Clusters[index])].append(Ap[i])
 
-        clust_lib.free_memory_double(Ap)    
+        clust_lib.free_memory_double(Ap)#Freeing memory    
 
-    clust_lib.free_memory_int(Np)
+    clust_lib.free_memory_int(Np)#Freeing memory
 
     if Clusters ==[[]]:
         return [],{}
@@ -268,7 +267,7 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('speciation_and_angles.py program to identify speciation, calculating angles, and evaluating the lifetime of bonds')
+            print ('speciation_and_angles.py program to identify speciation, calculate angles, and evaluate the lifetime of bonds')
             print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
             print ('default values: -f bonding.umd.dat -s 1 -m 5 -r 1')
             print ('the bond file contains the bonds relations for each snapshot. Computed with Bond_fast_specific.py.')
@@ -375,17 +374,15 @@ def main(argv):
         fb.close()
  
     if t==0 and p==0 :
-        return True
+        return True#For the GUI
     if t==1 and p==0 :
         if len(Centrals)==1 and len(Adjacents)==1:
             CentIndexes,AdjIndexes,MyCrystal,Bonds,TimeStep = umdpf.read_bonds(BondFile,Centrals,Adjacents,Nsteps,"Dictionary")
             if CentIndexes == -1 :#For the GUI to display an error message whenever an element is missing
                 return AdjIndexes
             
-
-            
             MyCrystalUMD,TimeStepUMD = umdpf.Crystallization(UMDFile)
-            TimeRatio = int(TimeStep/TimeStepUMD)
+            TimeRatio = int(TimeStep/TimeStepUMD)#Used to match the snapshots of UMD and bonding file, in case there has been a sampling of the snapshots in between
 
             (MyCrystalUMD,AllSnapshots,TimeStepUMD,length)=umdpf.read_values(UMDFile,"xcart","lists",Nsteps*TimeRatio)
             
@@ -435,13 +432,12 @@ def main(argv):
         
     if (t==1) and (rings==1):
         MyCrystalUMD,TimeStepUMD = umdpf.Crystallization(UMDFile)
-        TimeRatio = int(TimeStep/TimeStepUMD)
+        TimeRatio = int(TimeStep/TimeStepUMD)#Used to match the snapshots of UMD and bonding file, in case there has been a sampling of the snapshots in between
         MyCrystalUMD,SnapshotsXCart,TimeStepUMD,length = umdpf.read_values(UMDFile,"xcart","line",Nsteps*TimeRatio,nCores=nCores)
     else :
         SnapshotsXCart = [[] for _ in range(len(Bonds))]#Blank list which will not be used but is needed as an argument
     
     clusteringRed=partial(clustering,maxSteps=len(Bonds)-1,natom=MyCrystal.natom,nAts=nAts,CentIndexes=CentIndexes,OutIndexes=AdjIndexes,r=rings,acell=MyCrystal.acell,AngleCalc=t)
-
 
 #    DataII = []
 #    for i in range(len(Bonds)):
@@ -449,6 +445,7 @@ def main(argv):
 #    print(DataII[0])
 #    sys.exit()
 
+    #Separating the algoritm's path accordingly to the user's will
     if nCores != None :
         with concurrent.futures.ProcessPoolExecutor(max_workers = nCores) as executor :
             Data=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
@@ -457,21 +454,15 @@ def main(argv):
             Data=list(executor.map(clusteringRed,Bonds,BondsIndexes,SnapshotsXCart, [step for step in range(len(Bonds))])) #Computes the clusters of atoms for each snapshot separately
             
     clusters,Angles = map(list,zip(*Data))
-    
-#    if t==1 and p==0 :
-#        FileAngles = K
-#        fang = open()
-    
+        
     population=analysis_subtab(clusters,0)
         #Creating the output files        
     FileAll = BondFile[:-4] +'.r=' + str(rings) + '.popul.dat'
-    #print ('Population will be written in ',FileAll,' file')
     FileStat = BondFile[:-4] + '.r=' + str(rings) + '.stat.dat'
-    #print ('Statistics will be written in ',FileStat,' file')
     FileStep = BondFile[:-4] + '.r=' + str(rings) + '.step.dat'
     header+="\n"            
     
-    print("\nWriting...")
+    print("\nWriting...")#writing the clusters in a file
     
     fs = open(FileStep,'w')
     fs.write(header)        
@@ -481,7 +472,7 @@ def main(argv):
         fs.write(st)
         fs.write(headstring)
         Clusts = clusters[step]
-        vapor = [at for at in range(MyCrystal.natom)]
+        vapor = [at for at in range(MyCrystal.natom)]#The lonely atoms are considered to be vapor, and the others will be gradually pruned from this list
 
         for clust in Clusts :
             index=[0 for _ in range(MyCrystal.ntypat)]
@@ -496,18 +487,16 @@ def main(argv):
             fs.write(newstring)
             for at in clust :
                 vapor[at]=-1
-        for at in vapor :
+        for at in vapor :#The remaining not -1 atoms are considered to be vapors
             if at !=-1 and (is_in(at,CentIndexes) or is_in(at,AdjIndexes)) :
                 fs.write(MyCrystal.elements[MyCrystal.typat[at]]+'_1\t1\t['+str(at)+']\n')
         
     fs.close()
             
-                    
-   
-    dicoNames={}
-    dicoTimes={}
-    dicoStats={}
-    dicoMeanAngle={}
+    dicoNames={}#Clusters by name (chemical species) ; values as list whose items are under the form : [individual atoms,initial step, last step, life time]
+    dicoStats={}#Clusters by name (chemical species) ; values as sub-dictionaries whose keys are 'lifetime' (combined life time of the molecules of this specie) and '#atoms' (number of atoms of this specie)
+    dicoTimes={}#Clusters (individual atoms) by step of appearance. values as list whose items are under the form : [individual atoms,name of the chemical specie,last step, life time]
+    dicoMeanAngle={}#Mean angle, cluster by cluster. The keys are the names of clusters (individual atoms), the valuee are under the form [sum of (mean of angles for each instance of the cluser),number of instances]
     total=0
     for key in population : 
         index=[0 for _ in range(MyCrystal.ntypat)]
@@ -521,7 +510,6 @@ def main(argv):
                 name+=MyCrystal.elements[elem]+'_'+str(index[elem])
 
         for life in population[key]:
-#            print(life,"tot+=",Nsteps*TimeStep*(life[-1]-life[0]+1),"from ", life[-1]-life[0]+1)
             if (Nsteps*TimeStep*(life[-1]-life[0]+1))>minlife :
                 
                 if name in dicoNames: 
@@ -542,18 +530,12 @@ def main(argv):
         newstring="Formula\tBegin (step)\tEnd(step)\tlifetime (fs)\tcomposition\tAngles\n"
     else :
         newstring="Formula\tBegin (step)\tEnd(step)\tlifetime (fs)\tcomposition\n"
-     
-
-    
-    
-    
-    
+        
     fa = open(FileAll,'w')
     fa.write(header)
     fa.write(newstring)
     for ii in range(len(Bonds)):
         if ii in dicoTimes:
-                #print(dicoTimes[ii])
             for data in dicoTimes[ii]:
                 if data[3]>minlife :
                     newstring=data[1]+"\t"+str(ii*Nsteps)+"\t"+str(data[2]*Nsteps)+"\t"+str(data[3])+"\t"+data[0]

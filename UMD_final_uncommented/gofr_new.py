@@ -26,7 +26,7 @@ if OS == "Linux":
 elif OS == "Windows":
     LibraryName = 'c_gofr_new.dll'
 elif OS == "Darwin":
-    LibraryName = 'c_gofr_new.dylib'
+    LibraryName = 'c_gofr_new.dylib’'
 
 current_path=os.path.abspath(__file__)#For all this to work, the file c_bonds_fullD.so must be in the same directory than gofr_umd
 path_split=current_path.split('/')
@@ -45,28 +45,29 @@ gofr_lib.compute_gofr.restype = None
 gofr_lib.free_memory.argtypes = [ctypes.POINTER(ctypes.c_int)]
 gofr_lib.free_memory.restype = None
 
-def compute_gofr_snapshot(MySnapshot,step,maxStep,Types,ntypes,discrete,acell,ndivx,ortho):
+def compute_gofr_snapshot(MySnapshot,step,maxStep,Types,ntypes,discrete,acell,ndivx,ortho):#Computes the distance matrix for each snapshot
     
     if(100*step//maxStep != 100*(step-1)//maxStep):
         sys.stdout.write('\rCalculating gofr. Progress : '+str(100*step//maxStep)+"%")
         sys.stdout.flush()
         
-    if ortho :
-        RVp= np.array([0]).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-        acp = (ctypes.c_double *3)(*acell)
+    if ortho :#If the unit cell is orthogonal
+        RVp = np.array([0]).ctypes.data_as(ctypes.POINTER(ctypes.c_double))#Will not be used but is required as an argument
+        acp = (ctypes.c_double *3)(*acell)#Lengths of each vector
         diag = 1
     else:
-        acp = (ctypes.c_double * 9)(*acell[0])
-        RVp = (ctypes.c_double * 9)(*acell[1])
+        acp = (ctypes.c_double * 9)(*acell[0])#Direct vectors
+        RVp = (ctypes.c_double * 9)(*acell[1])#Reciprocal vectors
         diag = 0
 
-        
+    #Creation of the pointers
     Tp = (ctypes.c_int * (ntypes+2))(*Types)
     MSp = (ctypes.c_double * (3*Types[-1]))(*MySnapshot)
 
-    gofr = np.zeros((ntypes*ntypes*(ndivx+1)),dtype=np.int32)
+    gofr = np.zeros((ntypes*ntypes*(ndivx+1)),dtype=np.int32)#The numpy matrix is directly given to the c function and retrieved afterwards
 
     gofr_lib.compute_gofr(gofr,MSp,ntypes,Tp,discrete,acp,RVp,ndivx+1,diag)
+    
     return gofr
 
 def main(argv):
@@ -120,11 +121,6 @@ def main(argv):
         V1 = np.array(MyCrystal.rprimd[1])
         V2 = np.array(MyCrystal.rprimd[2])
     
-        V0n = np.array(MyCrystal.rprimd[0])/np.linalg.norm(V0)
-        V1n = np.array(MyCrystal.rprimd[1])/np.linalg.norm(V1)
-        V2n = np.array(MyCrystal.rprimd[2])/np.linalg.norm(V2)
-
-
         #Vectors of the reciprocal space
         RecVecs0 = np.cross(V1,V2)/np.dot(np.cross(V1,V2),V0)
         RecVecs1 = np.cross(V2,V0)/np.dot(np.cross(V2,V0),V1)
@@ -134,21 +130,22 @@ def main(argv):
         CellVecs = list(V0)+list(V1)+list(V2)
         
         acell = [CellVecs,RecVecs]
+        maxlength = min(np.linalg.norm(V0),np.linalg.norm(V2),np.linalg.norm(V2))
+
 
     else :
         acell = MyCrystal.acell
+        maxlength = min(MyCrystal.acell[:2])
+
 
 
     Types=[sum(MyCrystal.types[:i]) for i in range(MyCrystal.ntypat)]
     Types.append(MyCrystal.natom)
     Types.append(MyCrystal.natom)
-    maxlength = min(MyCrystal.acell[:2])
     ndivx = int(maxlength / (2 * discrete))
         
     ntypes = len(Types)-2
     compute_gofr_red = partial(compute_gofr_snapshot,maxStep=length-1,Types=Types,ntypes=ntypes,discrete=discrete,acell=acell,ndivx=ndivx,ortho=ortho)
-#    g = compute_gofr_red(SnapshotsXCart[0],0)
-#    sys.exit()
 
     if nCores != None :
         with concurrent.futures.ProcessPoolExecutor(max_workers=nCores) as executor :
@@ -161,18 +158,12 @@ def main(argv):
 
     Gofr = sum(Gofrs)
     G = np.zeros((ntypes,ntypes,ndivx+1),dtype=int)
-        
+    #We fill a 3D matrix with the values of the array     
     for i in range(ntypes):
         for j in range(i,ntypes):
             for k in range(ndivx+1):
                 G[i][j][k]=Gofr[k*(ntypes*ntypes)+i*ntypes+j]
                 G[j][i][k]=Gofr[k*(ntypes*ntypes)+i*ntypes+j]
-
-        
-#        print(G[0][1][:],sum(G[0][1][:]))
-#        plt.plot(G[0][1][:])
-#        plt.show()
-#        sys.exit()
         
     gofrname = umdfile[:-8]+".gofr_new.dat"
     fa = open(gofrname,'w')
@@ -184,13 +175,12 @@ def main(argv):
     fa.write(header[:-1]+"\n")
         
     Int = np.zeros((ntypes,ntypes))
-    volcell = maxlength**3
-        
+    volcell = maxlength**3#Surrounding volume that we took in account (for each atom) for the calculation of the gofr
         
     for kk in range(ndivx+1):
         smallr = kk*discrete
         bigr = smallr + discrete
-        volshell = 4/3*math.pi*(bigr**3-smallr**3)       
+        volshell = 4/3*math.pi*(bigr**3-smallr**3)#Spatial normalization of the number of atoms at a given radius       
         string = str(round(kk*discrete+discrete/2,5))+"\t"
         for iel in range(ntypes):
             for jel in range(ntypes):
@@ -209,7 +199,6 @@ def main(argv):
         
     print("gofr file successfully created under the name "+gofrname)
     print("time :",time.time()-start)
-
 
 if __name__ == "__main__":
    main(sys.argv[1:])

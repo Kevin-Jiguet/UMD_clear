@@ -50,68 +50,57 @@ msd_lib.compute_msd.restype = ctypes.POINTER(ctypes.c_double)
 
 
 
-def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic,natom):
+def msdAtom_C(n,PosAr,numsteps,hh,vv,ballistic,natom):#To calculate the MSD without projection
     if((100*n)//natom!=(100*(n-1))//natom):
         sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
         sys.stdout.flush()
-    t1=time.time()
     nitmax=(numsteps//2-ballistic)
-    Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))#Creation of the pointer for the C function
     msd=[]
-    t2=time.time()
-    msdP=msd_lib.compute_msd(Posp,hh,vv,ballistic,nitmax)
+    msdP=msd_lib.compute_msd(Posp,hh,vv,ballistic,nitmax)#Calculation of the msd
     for i in range(int(nitmax/vv)):
         msd.append(msdP[i])
-    t3=time.time()
-    msd_lib.free_memory(msdP)
-#    print("step "+str(n)+" : conversions "+str(t2-t1)+" s ; calculations "+str(t3-t2)+" s" )
+    msd_lib.free_memory(msdP)#liberation of memory
     return msd
 
-def msdAtom_CAxes(n,PosAr,numsteps,hh,vv,ballistic,Axes,natom):
+def msdAtom_CAxes(n,PosAr,numsteps,hh,vv,ballistic,Axes,natom):#To calculate the MSD projected along 3 axes
     if((100*n)//natom!=(100*(n-1))//natom):
         sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
         sys.stdout.flush()
-    t1=time.time()
     nitmax=(numsteps//2-ballistic)
+    #Creation of the pointers
     Axesp = (9 * ctypes.c_double)(*Axes)
     Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    msd=msd_lib.compute_msd_tilted(Posp,hh,vv,ballistic,nitmax,Axesp)
-    t2=time.time()
+    msd=msd_lib.compute_msd_tilted(Posp,hh,vv,ballistic,nitmax,Axesp)#Calculation of the msd
     msdA1,msdA2,msdA3 = [], [], []
     for i in range(int(nitmax/vv)):
         msdA1.append(msd[i])
         msdA2.append(msd[i+int(nitmax/vv)])
         msdA3.append(msd[i+2*int(nitmax/vv)])
-    msd_lib.free_memory(msd)
-    t3=time.time()
-#    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
+    msd_lib.free_memory(msd)#liberation of memory
     return msdA1,msdA2,msdA3
 
-def msdAtom_CAxes_multi(n,PosAr,numsteps,hh,vv,ballistic,Axes,nAxes,natom):
+def msdAtom_CAxes_multi(n,PosAr,numsteps,hh,vv,ballistic,Axes,nAxes,natom):#To calculate the msd along an arbitrary number of axes
 
     if((100*n)//natom!=(100*(n-1))//natom):
         sys.stdout.write("\rCalculating MSD. Progress : "+str((100*n)//natom)+"%")
         sys.stdout.flush()
-    t1=time.time()
     nitmax=(numsteps//2-ballistic)
+    #Creation of the pointers
     Axesp = (3*nAxes * ctypes.c_double)(*Axes)
     Posp = (PosAr.flatten()).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    msd=msd_lib.compute_msd_tilted_multi(Posp,hh,vv,ballistic,nitmax,Axesp,int(len(Axes)/3))
-    t2=time.time()    
+    msd=msd_lib.compute_msd_tilted_multi(Posp,hh,vv,ballistic,nitmax,Axesp,int(len(Axes)/3))#Calculation of the msd
     msds = [[] for _ in range(nAxes)]
     for i in range(int(nitmax/vv)):
         for j in range(int(len(Axes)/3)):
             msds[j].append(msd[i+j*int(nitmax/vv)])
-    msd_lib.free_memory(msd)
-    t3=time.time()
-#    print("step "+str(n)+" : calc "+str(t2-t1)+" s ; copy "+str(t3-t2)+" s" )
+    msd_lib.free_memory(msd)#liberation of memory
     return msds
 
 
 def main(argv):
     hh = 1
     vv = 1
-    u=0
     ballistic = 0
     TimeStep = 1
     umdpf.headerumd()
@@ -178,135 +167,128 @@ def main(argv):
     if (os.path.isfile(umdfile)):
         
         MyCrystal,SnapshotsValues,TimeStep,numsteps = umdpf.read_values(umdfile,"absxcart","chunks")
-        print(len(SnapshotsValues))
 
-        if Auto :
+        if Auto :#Creation of the axes as the lattice vectors
             Axes = MyCrystal.rprim[0] + MyCrystal.rprim[1] + MyCrystal.rprim[2]    
 
         
         ArrayAbsXcart = np.array(SnapshotsValues).flatten()
 
-        ListAbsXcart = [ArrayAbsXcart[at::MyCrystal.natom] for at in range(MyCrystal.natom)]
+        ListAbsXcart = [ArrayAbsXcart[at::MyCrystal.natom] for at in range(MyCrystal.natom)]#Each sub-list pertains to an atom and contains the list of x,y,z coordinates for each snapshot, for this atom
 
-        
-
+    
         print ('Number of atoms of each type is ',MyCrystal.types)
         Instants = []
+        #Separation of the algorithm's path in accordance with the parameters who have been provided by the user
+        
+        if Axes !=None :
+            msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes,natom=MyCrystal.natom-1)
+        else :
+            msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,natom=MyCrystal.natom-1)
 
         if nCores!=None:
             with concurrent.futures.ProcessPoolExecutor(max_workers=nCores) as executor:
-                if Axes !=None :
-                    msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes,natom=MyCrystal.natom-1)
-                else :
-                    msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,natom=MyCrystal.natom-1)
-        else :
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                if Axes !=None :
-                    msdAtomRed=partial(msdAtom_CAxes_multi,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,Axes=Axes,nAxes=nAxes,natom=MyCrystal.natom-1)
-                else :
-                    msdAtomRed=partial(msdAtom_C,numsteps=numsteps,hh=hh,vv=vv,ballistic=ballistic,natom=MyCrystal.natom-1)
-
-                msdfile = umdfile[:-8] + '.msd_fast'
-                              
                 msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[ListAbsXcart[iatom] for iatom in range(MyCrystal.natom)]))
+        else :
+            with concurrent.futures.ProcessPoolExecutor() as executor:                  
+                msdArray=list(executor.map(msdAtomRed,[iatom for iatom in range(MyCrystal.natom)],[ListAbsXcart[iatom] for iatom in range(MyCrystal.natom)]))#MSD at each time, atom by atom
 
-            print("\n")
-            headerstring='MSD : -f '+umdfile+' -m '+ Mode +'-a '+str(Axes)+'\n'
-            if(Mode=="elements"):
+
+        msdfile = umdfile[:-8] + '.msd_fast'
+                              
+        print("\n")
+        headerstring='MSD : -f '+umdfile+' -m '+ Mode +'-a '+str(Axes)+'\n'
+        if(Mode=="elements"):
                 
-                if Axes != None :
-                    msdfile+='.axes'
-                    MSD=np.array([[np.zeros(len(msdArray[0][0])) for _ in range(nAxes+1)] for _ in range(MyCrystal.ntypat)])
-                    for iatom in range(len(msdArray)) :
-                        for kk in range(nAxes):
-                            MSD[MyCrystal.typat[iatom]][1+kk]+=msdArray[iatom][kk]
-                            MSD[MyCrystal.typat[iatom]][0]+=msdArray[iatom][kk]
-                else :
-                    MSD=np.array([[np.zeros(len(msdArray[0]))] for _ in range(MyCrystal.ntypat)])
-                    for iatom in range(len(msdArray)) :
-                        MSD[MyCrystal.typat[iatom]][0]+=msdArray[iatom]
-                        
-                msdfile+='.elements.dat'
-                f = open(msdfile,'w')
-                f.write(headerstring)
-                string='time (fs)\t'
-                if Axes!=None :
-                    for itypat in range(MyCrystal.ntypat):
-                        string +=  MyCrystal.elements[itypat]+'\t'
-                        for i in range(nAxes):
-                            string +=  MyCrystal.elements[itypat] +"("+ str(i)+")"+'\t'
-                else :
-                    for itypat in range(MyCrystal.ntypat):
-                        string += MyCrystal.elements[itypat] + '\t'
-                string = string + '\n'
-                f.write(string)
- #                   print(niter, hh, ballistic)
-                weight=int((int(numsteps/2)-ballistic)/hh)-1
- #                   print("weight=",weight*MyCrystal.natom)                    
-                for ii in range(len(MSD[0][0])):
-                    instant = (float(ii)*TimeStep*vv)+ballistic
-                    Instants.append(instant)
-                    string = str(instant)
-                    for jj in range(MyCrystal.ntypat):
-                        string+='\t' + str(MSD[jj][0][ii]/(float(MyCrystal.types[jj])*float(weight)))
-                        if Axes != None :
-                            for kk in range(1,nAxes+1):
-                                string += '\t' + str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight)))
-                    string = string + '\n'
-#                    print("writing string ",ii," : ",string)
-                    f.write(string)
-                print ('MSDs printed in file ',msdfile)
-            
-            elif(Mode=="atoms"):
-                
-                if Axes != None :
-                    msdfile+=".axes"
-                    MSD=np.array([[np.zeros(len(msdArray[0][0])) for _ in range(nAxes+1)] for _ in range(MyCrystal.natom)])
-                    for iatom in range(len(msdArray)) :
-                        for kk in range(nAxes):
-                            MSD[iatom][1+kk]=msdArray[iatom][kk]
-                            MSD[iatom][0]+=msdArray[iatom][kk]
+            if Axes != None :
+                msdfile+='.axes'
+                MSD=np.array([[np.zeros(len(msdArray[0][0])) for _ in range(nAxes+1)] for _ in range(MyCrystal.ntypat)])
+                for iatom in range(len(msdArray)) :
+                    for kk in range(nAxes):
+                        MSD[MyCrystal.typat[iatom]][1+kk]+=msdArray[iatom][kk]#Sum of MSDs atomic type by atomic type, axis by axis
+                        MSD[MyCrystal.typat[iatom]][0]+=msdArray[iatom][kk]#Sum of MSDs of all axes
+            else :
+                MSD=np.array([[np.zeros(len(msdArray[0]))] for _ in range(MyCrystal.ntypat)])#If there's no axes to take in account, we just sum the MSD type by type
+                for iatom in range(len(msdArray)) :
+                    MSD[MyCrystal.typat[iatom]][0]+=msdArray[iatom]
                     
-                else :
-                    MSD=np.array([[np.zeros(len(msdArray[0]))] for _ in range(MyCrystal.natom)])
-                    for iatom in range(len(msdArray)) :
-                        MSD[iatom][0] = msdArray[iatom]
-                msdfile+='.atoms.dat'
-                f = open(msdfile,'w')
-                f.write(headerstring)
-                string='time_(fs)\t'
-                lastEl=''
-                for iatom in range(MyCrystal.natom):
-                    if lastEl!=MyCrystal.elements[MyCrystal.typat[iatom]]:
-                        indexat = 0
-                        lastEl=MyCrystal.elements[MyCrystal.typat[iatom]]
-                    label = lastEl+str(indexat)
+            msdfile+='.elements.dat'
+            f = open(msdfile,'w')
+            f.write(headerstring)
+            string='time (fs)\t'
+            if Axes!=None :
+                for itypat in range(MyCrystal.ntypat):
+                    string +=  MyCrystal.elements[itypat]+'\t'
+                    for i in range(nAxes):
+                        string +=  MyCrystal.elements[itypat] +"("+ str(i)+")"+'\t'
+            else :
+                for itypat in range(MyCrystal.ntypat):
+                    string += MyCrystal.elements[itypat] + '\t'
+            string = string + '\n'
+            f.write(string)
+            weight=int((int(numsteps/2)-ballistic)/hh)-1#number of time steps in MSD
+            for ii in range(len(MSD[0][0])):
+                instant = (float(ii)*TimeStep*vv)+ballistic#Time of occurence reconstructed
+                Instants.append(instant)
+                string = str(instant)
+                for jj in range(MyCrystal.ntypat):#We then write the list of (normalized) MSD(s) for each element at this given time
+                    string+='\t' + str(MSD[jj][0][ii]/(float(MyCrystal.types[jj])*float(weight)))
                     if Axes != None :
-                        string +=  label + '\t' + label + '(1)\t' + label + '(2)\t'+ label + '(3)\t'
-                    else :
-                        string += label +'\t'
-                    
-                    indexat+=1
-                    
+                        for kk in range(1,nAxes+1):
+                            string += '\t' + str(MSD[jj][kk][ii]/(float(MyCrystal.types[jj])*float(weight)))
                 string = string + '\n'
                 f.write(string)
+            print ('MSDs printed in file ',msdfile)
+           
+        elif(Mode=="atoms"):#Same thing as above, but we print the MSD of individual atoms.
+              
+            if Axes != None :
+                msdfile+=".axes"
+                MSD=np.array([[np.zeros(len(msdArray[0][0])) for _ in range(nAxes+1)] for _ in range(MyCrystal.natom)])
+                for iatom in range(len(msdArray)) :
+                    for kk in range(nAxes):
+                        MSD[iatom][1+kk]=msdArray[iatom][kk]
+                        MSD[iatom][0]+=msdArray[iatom][kk]
+            else :
+                MSD=np.array([[np.zeros(len(msdArray[0]))] for _ in range(MyCrystal.natom)])
+                for iatom in range(len(msdArray)) :
+                    MSD[iatom][0] = msdArray[iatom]
+            msdfile+='.atoms.dat'
+            f = open(msdfile,'w')
+            f.write(headerstring)
+            string='time_(fs)\t'
+            lastEl=''
+            for iatom in range(MyCrystal.natom):
+                if lastEl!=MyCrystal.elements[MyCrystal.typat[iatom]]:
+                    indexat = 0
+                    lastEl=MyCrystal.elements[MyCrystal.typat[iatom]]
+                label = lastEl+str(indexat)
+                if Axes != None :
+                    string +=  label + '\t' + label + '(1)\t' + label + '(2)\t'+ label + '(3)\t'
+                else :
+                    string += label +'\t'
+                
+                indexat+=1
+                
+            string = string + '\n'
+            f.write(string)
 
-                weight=int((int(numsteps/2)-ballistic)/hh)-1
+            weight=int((int(numsteps/2)-ballistic)/hh)-1
 
-                for ii in range(len(MSD[0][0])):     
-                    instant = (float(ii)*TimeStep*vv)+ballistic
-                    Instants.append(instant)
-                    string = str(instant)
-                    for jj in range(MyCrystal.natom):
-                        string+='\t' + str(MSD[jj][0][ii]/(float(weight)))
-                        if Axes != None :
-                            for kk in range(1,nAxes+1):
-                                string += '\t' + str(MSD[jj][kk][ii]/(float(weight)))
-                    string +='\n'
-                    f.write(string)
+            for ii in range(len(MSD[0][0])):     
+                instant = (float(ii)*TimeStep*vv)+ballistic
+                Instants.append(instant)
+                string = str(instant)
+                for jj in range(MyCrystal.natom):
+                    string+='\t' + str(MSD[jj][0][ii]/(float(weight)))
+                    if Axes != None :
+                        for kk in range(1,nAxes+1):
+                            string += '\t' + str(MSD[jj][kk][ii]/(float(weight)))
+                string +='\n'
+                f.write(string)
 
 
-                print ('MSDs printed in file ',msdfile)
+        print ('MSDs printed in file ',msdfile)
         return [msdfile,MSD,Instants,MyCrystal.elements,Axes]
          
     else:

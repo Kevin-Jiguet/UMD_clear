@@ -67,11 +67,10 @@ def read_inputfile(InputFile,MyCrystal):#Creates a matrix from the .dat file con
 def WriteBonding_C_full(MySnapshotL,step,maxSteps,MyCrystal,BondTable,timestep,natom,numCells,acell,specifics,ortho=True):#Calculates bonds in a given snapshot
     
     if(100*step//maxSteps != 100*(step-1)//maxSteps or True):
-        sys.stdout.write("\rDetermining bonds between atoms. Progress : "+str(100*step//maxSteps)+"%")#str(100*step//maxSteps)+"%")        
+        sys.stdout.write("\rDetermining bonds between atoms. Progress : "+str(100*step//maxSteps)+"%") 
         sys.stdout.flush()
 
-    #Preparing data to be used by the C function
-    t0 = time.time()
+    #Preparing data to be used by the C function, pointers creation
     MSp = np.array(list(MySnapshotL)).ctypes.data_as(ctypes.POINTER(ctypes.c_double))    #C pointers
     BTp = np.array(BondTable).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     CrystalTypes = []
@@ -88,7 +87,7 @@ def WriteBonding_C_full(MySnapshotL,step,maxSteps,MyCrystal,BondTable,timestep,n
         specification = 1
         SPp = (ctypes.c_double * 6)(*specifics)
     
-    if ortho :
+    if ortho :#Orthogonal cell
         RVp= np.array([0]).ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         Cellp = (ctypes.c_double *3)(*acell)
         diag = 1
@@ -97,26 +96,20 @@ def WriteBonding_C_full(MySnapshotL,step,maxSteps,MyCrystal,BondTable,timestep,n
         RVp = (ctypes.c_double * 9)(*acell[1])
         diag = 0
 
-    t1 = time.time()
     Bonds = fullbond_lib.compute_Bonds_full(MSp,BTp,CTp,natom,MyCrystal.ntypat,Cellp,RVp,numCells,SPp,specification,diag)
-    t2 = time.time()
                
     BondsList=[[at] for at in range(natom)]
-    
-    for at in range(natom):
-        L = Bonds[at][0]
-#        print("\natom "+str(at)+" ("+str(L)+")\t",end=' ')
-        for ineighbor in range(1,L+1):
-            BondsList[Bonds[at][ineighbor]].append(at)
-#            print(str(Bonds[at][ineighbor])+"\t",end=' ')
-        fullbond_lib.free_memory_int(Bonds[at])
-    
+
 
     #Converting bond profile from C to python list
-    #The central atoms are separated by the value -1
-    fullbond_lib.free_memory(Bonds)
-    t3 = time.time()
-#    print("preparing :",t1-t0," calculating : ",t2-t1," transcribing : ",t3-t2)
+    #The first number of each sub-list is the length of said sub-list  
+    for at in range(natom):
+        L = Bonds[at][0]
+        for ineighbor in range(1,L+1):
+            BondsList[Bonds[at][ineighbor]].append(at)
+        fullbond_lib.free_memory_int(Bonds[at])#Freeing the memory of each sub-list
+    
+    fullbond_lib.free_memory(Bonds)#Freeing the memory of the list
     return BondsList        
 
 def main(argv):
@@ -188,18 +181,18 @@ def main(argv):
     acell=MyCrystal.acell
 
     ortho = False    
-    if [rprimd[0][1],rprimd[0][2],rprimd[1][0],rprimd[1][2],rprimd[2][0],rprimd[2][1]] == [0,0,0,0,0,0]:
+    if [rprimd[0][1],rprimd[0][2],rprimd[1][0],rprimd[1][2],rprimd[2][0],rprimd[2][1]] == [0,0,0,0,0,0]:#If the rprimd matrix is diagonal, the cell is otrhogonal
         ortho = True
 
     if maxlength==None and len(InputFile)>0 :
         BondTable = read_inputfile(InputFile,MyCrystal)#Converts the input file into a matrix
-    elif maxlength!=None :
+    elif maxlength!=None :#If a unique bonding length is specified
         BondTable = [[maxlength**2 for _ in range(MyCrystal.ntypat)] for _ in range(MyCrystal.ntypat)]#Creates a matrix filled with -l value
 
 
     M=math.sqrt(max([max(Bondlengths) for Bondlengths in BondTable]))#maximal length of any bond
 
-    if numCells == None :#If the number of cells isn't specified, it is automatically calculated
+    if numCells == None :#If the number of subcells isn't specified, it is automatically calculated. The size of a subcell is smaller than the biggest bond length.
         numCells = int(min(acell)/M)
         print("Number of cells automatically fixed to "+str(numCells))
         
@@ -219,11 +212,6 @@ def main(argv):
         V1 = np.array(MyCrystal.rprimd[1])
         V2 = np.array(MyCrystal.rprimd[2])
     
-        V0n = np.array(MyCrystal.rprimd[0])/np.linalg.norm(V0)
-        V1n = np.array(MyCrystal.rprimd[1])/np.linalg.norm(V1)
-        V2n = np.array(MyCrystal.rprimd[2])/np.linalg.norm(V2)
-
-
         #Vectors of the reciprocal space
         RecVecs0 = np.cross(V1,V2)/np.dot(np.cross(V1,V2),V0)
         RecVecs1 = np.cross(V2,V0)/np.dot(np.cross(V2,V0),V1)
