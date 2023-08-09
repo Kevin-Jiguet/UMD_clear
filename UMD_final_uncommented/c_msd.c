@@ -4,10 +4,11 @@
 #include <stdlib.h>
 
 
+//These scripts are meant to calculate the msd in slightly different ways. Their functionment is very similar.
+
 void free_memory(double *array){
 	free(array);
 }
-
 
 double* compute_msd(const double *pos, const int hh, const int vv, const int ballistic, const int nitmax)//Calculates the msd from the positions pos.
 {
@@ -16,18 +17,18 @@ double* compute_msd(const double *pos, const int hh, const int vv, const int bal
 	msd = calloc((nitmax/vv),sizeof(double));
 
         for (int i=ballistic+hh ; i<nitmax ; i=i+hh){
-		
+		//We extract the position of the atom at time i
             const double Xorigin = pos[3*i];
             const double Yorigin = pos[3*i+1];
             const double Zorigin = pos[3*i+2];
 
             for (int j=0 ; j<nitmax ; j=j+vv){
-
+			//And at time j
                 const double Xfuture = pos[3*(i+j)];
                 const double Yfuture = pos[3*(i+j)+1];
                 const double Zfuture = pos[3*(i+j)+2];
 
-                msd[(j/vv)] = msd[(j/vv)] + pow((Xfuture-Xorigin),2) + pow((Yfuture-Yorigin),2) + pow((Zfuture-Zorigin),2);
+                msd[(j/vv)] = msd[(j/vv)] + pow((Xfuture-Xorigin),2) + pow((Yfuture-Yorigin),2) + pow((Zfuture-Zorigin),2);//MSD calculation
 
             }
         }
@@ -70,7 +71,7 @@ return msd;
 
 }
 
-double* compute_msd_tilted_multi(const double *pos, const int hh, const int vv, const int ballistic, const int nitmax, const double *Axes, const int nAxes)//Computes the msd along particular axes
+double* compute_msd_tilted_multi(const double *pos, const int hh, const int vv, const int ballistic, const int nitmax, const double *Axes, const int nAxes)//Computes the msd along an arbitraty number of particular axes
 {
 	double* msd;
 	double deltAxe;

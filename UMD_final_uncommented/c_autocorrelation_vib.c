@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-double* compute_autocorrelation(double *pos, int nostep, int maxtau){
+double* compute_autocorrelation(double *pos, int nostep, int maxtau){//Compute the autocorrelation of the tab pos
 
 	double* res;
 	double normalization = nostep;

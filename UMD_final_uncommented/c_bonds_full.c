@@ -48,7 +48,7 @@ bool specificity(double x, double y, double z, const double *specifics){//Check 
 int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, const int *CrystalTypes, const int nAtoms, const int ntypat, const double *cell, const double *rvec, const int nCells, const double *specifics, const int specification, const int diag){
     int* DicoAtoms;
     int* nMesh;
-    int* Mesh;
+    int** Mesh;
     int* MeshIndex;
     int** Bonding;
     int* nBonding;
@@ -117,10 +117,14 @@ int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, cons
 
 
     int M = maxval(nMesh,nCells*nCells*nCells);          //maximum number of atoms that a cell contains in this snapshot
-    Mesh = calloc((nCells*nCells*nCells*M),sizeof(int)); //Mesh will explicitely contain the atoms of each sub-cell
+    Mesh = (int **)malloc(nCells*nCells*nCells*sizeof(int*)); //Mesh will explicitely contain the atoms of each sub-cell
     Bonding = (int **)malloc(nAtoms*sizeof(int*));        //Bonding will contain the atoms that are bound to another. Each sub-tab corresponds to a single (central) atom. All the values will be initialized to -1, except the first of each sub-tab which will be its size.
     int Ats[M];                                          //table transitorily containing the atoms in a central cell
     int Coord[M*27];                                     //table transitorily containing the coordinating atoms in the 27 surrounding cells
+
+    for(int i=0 ; i<nCells*nCells*nCells ; i++){
+	Mesh[i] = (int *)malloc(nMesh[i]*sizeof(int));
+    }
 
     for(int i=0; i<nAtoms ; i++){
 	Bonding[i]=(int *)malloc((2)*sizeof(int));
@@ -137,13 +141,7 @@ int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, cons
         	nZ = DicoAtoms[3*iat+2];
         	cellnum = nX*nCells*nCells+nY*nCells+nZ;
         	index = MeshIndex[cellnum];
-		if(M*cellnum+index>=nCells*nCells*nCells*M){
-			printf("%d on %d (%d %d (%d : %d %d %d) %d %d)\n",M*cellnum+index,nCells*nCells*nCells*M,M,cellnum,iat,nX,nY,nZ,index,nCells);
-			
-     		}
-		if(M*cellnum+index>=nCells*nCells*nCells*M){printf("error 1\n");}
-		//printf("cell %d (%d) on %d (at %d)\n",cellnum,M*cellnum+index,nCells*nCells*nCells*M,iat);
-   		Mesh[M*cellnum+index] = iat;
+   		Mesh[cellnum][index] = iat;
 		MeshIndex[cellnum]++;  				//Counts the number of atoms presents in each cell
 	}
     }
@@ -165,8 +163,8 @@ int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, cons
             
 	    for(int iatom=0 ; iatom<index ; iatom++){//We note that all the atoms in the sub-cell will be examined in their potential bonding relationships to each other
 
-               	if(M*cellnum+iatom>=nCells*nCells*nCells*M){printf("error 2\n");}
-	        Ats[iatom]=Mesh[M*cellnum+iatom];
+              
+	        Ats[iatom]=Mesh[cellnum][iatom];
 		DicoAtoms[3*Ats[iatom]]=-1;
             }
 
@@ -181,7 +179,7 @@ int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, cons
                          
 			    for(int jatom = 0 ; jatom<indexCoord ; jatom++){
 	
-                                Coord[numCoord]=Mesh[M*cellnum+jatom];//We fill the Coord tab with all the atoms in the surrounding cells + the central cell
+                                Coord[numCoord]=Mesh[cellnum][jatom];//We fill the Coord tab with all the atoms in the surrounding cells + the central cell
                                 numCoord++;			      //Counting the atoms in the tab
 			
 			       }
@@ -272,6 +270,8 @@ int** compute_Bonds_full(const double *MySnapshot, const double *BondTable, cons
 	for(int i=0 ; i<nAtoms ; i++){//Now the first number of each tab is the number of coordinating atoms
 		Bonding[i][0]=nBonding[i];
 	}
+
+	for(int i=0 ; i<nCells*nCells*nCells ; i++){free(Mesh[i]);}
 
 	free(Mesh);
 	free(nMesh);

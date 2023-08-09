@@ -8,23 +8,25 @@ void free_memory(double *tab){
 }
 
 
-void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double discrete, double *acell, double *rvec, int ndivx, int diag){
+void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double discrete, double *acell, double *rvec, int ndivx, double maxlength, int diag){
 	double dist, deltX, deltY, deltZ, Xne, Yne, Zne, Xat, Yat, Zat, rda, rdb, rdc;
 	int tmin, tmax, adj_tmin, adj_tmax, col;
 
-	for(int el=0 ; el<ntypes ; el++){
+	for(int el=0 ; el<ntypes ; el++){//We go element by element 
 		
-		tmin = Types[el];
+		tmin = Types[el];//And determine the first and last index in the atom list corresponting to this element
 		tmax = Types[el+1];
 
-		for(int at = tmin ; at<tmax ; at++){			
+		for(int at = tmin ; at<tmax ; at++){//parsing the atoms list for central atoms			
 	
 			Xat = MySnapshot[3*at];
 			Yat = MySnapshot[3*at+1];
 			Zat = MySnapshot[3*at+2];
-			for(int adj_el = el ; adj_el<ntypes ; adj_el++){				
+			for(int adj_el = el ; adj_el<ntypes ; adj_el++){//We go element by element for their neighbors				
 
-				if(adj_el==el){
+				//Definition of the first and last indexes in the atom list corresponding to this element
+
+				if(adj_el==el){//If the 2 elements are the same, we adjust the first neighbor atom's index
 					if(at==tmax-1){
 						adj_el++; 
 						adj_tmin=Types[adj_el];
@@ -40,7 +42,7 @@ void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double 
 					adj_tmax = Types[adj_el+1];
 				}								
 
-				for(int ne=adj_tmin ; ne<adj_tmax ; ne++){
+				for(int ne=adj_tmin ; ne<adj_tmax ; ne++){//And for their neighbors
 		
 					Xne = MySnapshot[3*ne];
 					Yne = MySnapshot[3*ne+1];
@@ -49,7 +51,8 @@ void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double 
 					deltX = Xat-Xne;
 					deltY = Yat-Yne;
 					deltZ = Zat-Zne;
-					if(diag){
+					//Definition of the distance along x, y and z for the 2 atoms
+					if(diag){//Orthogonal cell case
 						if(fabs(deltX/acell[0])>0.5){
 							deltX = acell[0]-fabs(deltX);
 						}
@@ -60,7 +63,7 @@ void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double 
 							deltZ = acell[2]-fabs(deltZ);
 						}
 					}
-					else{
+					else{//Not orthogonal case
 					    	rda = deltX * rvec[0] + deltY * rvec[1] + deltZ * rvec[2];//We project the position difference in the 3 directions of the cell thanks to reciprocal vectors (remark : 1 > (rda, rdb, rdc) > 0)
 			    			rdb = deltX * rvec[3] + deltY * rvec[4] + deltZ * rvec[5];
 			    			rdc = deltX * rvec[6] + deltY * rvec[7] + deltZ * rvec[8];
@@ -82,7 +85,7 @@ void compute_gofr(int *gofr, double *MySnapshot, int ntypes, int *Types, double 
 						//printf("%f %f %f",deltX,deltY,deltZ);
 					}
 					dist = sqrt(pow(deltX,2)+pow(deltY,2)+pow(deltZ,2));
-					if(dist<=acell[0]/2){
+					if(dist<=maxlength/2){//If the distance is in the volume we take in account, we incremente the gofr in the right bin
 						col = (int)(dist/(discrete));
 						if(el == adj_el){
 							gofr[(ntypes*ntypes)*col+(el*ntypes + adj_el)] = gofr[(ntypes*ntypes)*col+(el*ntypes + adj_el)]+2;
