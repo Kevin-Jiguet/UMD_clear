@@ -216,7 +216,9 @@ def main(argv):
     PresList,PosList,indtype,dumpstyle=Variables(filename)
 
     natom,types,elements,ntypat,typat,[acellx,acelly,acellz],Tempindex,Pressindex,IEindex,Enthindex,timestepLog,timestepFile,style = Crystal(filename,logname,indtype)
-    
+    if Tempindex == None and style == "one" or style == "custom":
+        print("WARNING : Temperature information not present in log file. This can cause problem in some post-processing scripts.")
+
     fa = open(filename+".umd.dat",'w')    
 
     fa.write("natom "+str(natom)+"\n")
@@ -245,6 +247,7 @@ def main(argv):
     Press = '0'
     Temp = '0'
         
+    
     ff=open(filename,'r')
     fl=open(logname,'r')
     
