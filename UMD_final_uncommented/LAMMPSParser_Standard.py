@@ -8,13 +8,13 @@ Created on Wed May 17 07:43:57 2023
 import sys, getopt, os.path, itertools, math
 import numpy as np
 
-def Variables(filename):
+def Variables(filename):#Check which variables are present in the file and in which order
     ff=open(filename,'r')
     fline = ff.readline().split()
-    dumpstyle='MINI'
+    dumpstyle='MINI'#If it stays like this, the file is standardized and contains x, y and z only
     indtype=None
     PresList,PosList=None,None
-    if len(fline)>0 and fline[0]=='ITEM:':   
+    if len(fline)>0 and fline[0]=='ITEM:':   #Else, it can contain any variable in any order
         dumpstyle='ITEMS'
         VarList=['xs','ys','zs','x','y','z','xa','ya','za','vx','vy','vz','fx','fy','fz','id']
         PresList=[0 for _ in range(16)]
@@ -25,7 +25,7 @@ def Variables(filename):
             if var in VarList :
                 PresList[VarList.index(var)]=1
                 PosList.append(VarList.index(var))
-            elif var=='type':
+            elif var=='type':#Information about the element.
                 indtype=len(PosList)
                 PosList.append(-1)
             else:
@@ -34,14 +34,14 @@ def Variables(filename):
     ff.close()
     return PresList,PosList,indtype,dumpstyle
 
-def Crystal(filename,logname,indtype):
+def Crystal(filename,logname,indtype):#Extracts the information about the system (# of atoms, elements, etc.)
     natom = 0
     types =  []
     elements = []
     ntypat = 0
     typat = []
     t0 = 0
-    style=""
+    style=""#The way information about the parameters (T,P,etc.) is displayed in the log file
     
     fl=open(logname,"r")
     ff=open(filename,"r")
@@ -74,6 +74,8 @@ def Crystal(filename,logname,indtype):
     isatoms = 0
     fl.close()
     fl=open(logname,'r')
+
+    #Those variables code for the position of each parameter in the log file
     IEindex = None
     Enthindex = None
     Tempindex = None
@@ -138,7 +140,8 @@ def Crystal(filename,logname,indtype):
             else : 
                 timestepFile = (float(line[2]) - t0)*timestepLog
                 break
-    #If the information about atoms isn't fully contained in the log file
+                
+    #If the information about atoms isn't fully contained in the log file, we look in the dump file
     if(natom==0):
         types=[]
         ntypat=0
@@ -169,7 +172,7 @@ def Crystal(filename,logname,indtype):
         while len(line)<3 or (line[0]!="use" or line[1]!="deepmd-kit" or line[2]!="at:"):
             line=fl.readline().strip().split()
             icounter+=1
-            if icounter ==100 :
+            if icounter ==1000 :
                 break
         j=-1
         while True:
@@ -198,7 +201,8 @@ def main(argv):
     try:
         opts,args = getopt.getopt(argv,"f:l:a:",["fFile","lLog","aAllpress"])
     except getopt.GetoptError:
-        print("-f : LAMMPS file ; -l : log file ; -a : allpress file")
+        print("LAMMPSPArser_Standard to convert various LAMMPS files into UMD files")
+        print("-f : LAMMPS file ; -l : log file ; -a : allpress file (optional)")
         sys.exit()
     for opt,arg in opts : 
         if opt in "-f":
@@ -210,7 +214,8 @@ def main(argv):
             press = True
     print("Will use the file <"+filename+"> for positions") 
     print("Will use the file <"+logname+"> for thermodynamic data")
-    print("Will use the file <"+allname+"> for stress tensor values\n") 
+    if press :
+        print("Will use the file <"+allname+"> for stress tensor values\n") 
         
     
     PresList,PosList,indtype,dumpstyle=Variables(filename)
@@ -238,16 +243,13 @@ def main(argv):
         string+=" "+str(x)
     string+="\n\n"
     fa.write("typat "+string)
-
-
-
-
+    
+    #If a parameter is not present in the log file, we give it the value '0'
     IE = '0'
     Enth = '0'
     Press = '0'
     Temp = '0'
         
-    
     ff=open(filename,'r')
     fl=open(logname,'r')
     
@@ -278,7 +280,7 @@ def main(argv):
                 while(len(line)<2 or line[1]!="ATOMS"):
                     line = ff.readline().strip().split()
 
-            if style == "one" or style == "custom":         
+            if style == "one" or style == "custom":         #Extraction of the parameters
                 logline = fl.readline().strip().split()
                 if Tempindex != None :
                     Temp = logline[Tempindex]
@@ -289,7 +291,7 @@ def main(argv):
                 if IEindex != None :
                     IE = logline[IEindex]
 
-            elif style == "multi":
+            elif style == "multi":                          #Extraction of the parameters
                 logline = fl.readline().strip().split()
                 IE = logline[2]
                 Temp = logline[8]
@@ -323,8 +325,6 @@ def main(argv):
                 stressline = "StressTensor "+str(float(allLine[1])/10000)+" "+str(float(allLine[2])/10000)+" "+str(float(allLine[3])/10000)+" "+str(float(allLine[4])/10000)+" "+str(float(allLine[5])/10000)+" "+str(float(allLine[6])/10000)+" GPa\n"
 
                     
-            
-        
             fa.write(string)
             if press :
                 fa.write(stressline)
@@ -334,7 +334,7 @@ def main(argv):
             fa.write("atoms: reduced*3 cartesian*3(A) abs.diff.*3(A) velocity*3(A/fs) force*3(ev/A) \n")
             
             if(dumpstyle=='ITEMS'):
-                if PresList[-1]==1 :
+                if PresList[-1]==1 :#If the atoms aren't in order and their index is precised in the variable "id"
                     posId = PosList.index(15)
                     StrList=["" for _ in range(natom)]
                     for at in range(natom):
@@ -343,31 +343,31 @@ def main(argv):
                         line = line.strip().split()
                         CoordsLine=['0.0' for _ in range(15)]
                         ind=0
-                        for coord in line :
+                        for coord in line :#We parse the line and extract the variables
                             if PosList[ind]!=-1:
                                 if ind!=posId :
                                     CoordsLine[PosList[ind]]=coord
                                 else:
                                     atom=int(coord)
                             ind+=1
-                        
+                        #Filling the missing ones with the information we already have
                         if PresList[3]!=0 and PresList[0]==0:
                             for i in range(3):
                                 CoordsLine[i]=str(round(float(CoordsLine[3+i])/acell[i],5))
-                        
-                        if PresList[3]!=0 and PresList[6]==0:
-                            for i in range(3):
-                                CoordsLine[6+i]=CoordsLine[3+i]
-                        
+
+
+                        if PresList[6]==0:
+                            if PresList[3]!=0 :
+                                for i in range(3):
+                                    CoordsLine[6+i]=CoordsLine[3+i]
+                            elif PresList[0]!=0:
+                                for i in range(3):
+                                    CoordsLine[6+i]=str(round(float(CoordsLine[i])*acell[i],5))
+                                    
                         if PresList[0]!=0 and PresList[3]==0:
                             for i in range(3):
                                 CoordsLine[3+i]=str(round(float(CoordsLine[i])*acell[i],5))
-                
-                        if PresList[0]!=0 and PresList[6]==0:
-                            for i in range(3):
-                                CoordsLine[6+i]=str(round(float(CoordsLine[i])*acell[i],5))
-                            
-                
+                                
                         for i in range(15):
                             string+=CoordsLine[i]+" "
                         StrList[atom-1]=string+"\n"
