@@ -38,11 +38,16 @@ def main(argv):
     try:
         opts, arg = getopt.getopt(argv,"hf:n:a:k:",["fumdfile","nnData","aAxes","knCores"])
     except getopt.GetoptError:
-        print ('')
+        print("MSDdistrib.py -f <umdfile> -n <nData> -a <Axes> -k <nCores>")
         sys.exit(2)
     for opt, arg in opts:
         if opt == "-h":
-            print("Script")
+            print ('MSDdistrib to calculate the msd in a system along a distribution of axes betxeen two liminar axes')
+            print ('-f : UMD file')
+            print ('-n : number of axes in the distribution (default 20)')
+            print ('-a : Explicit expression of the liminar axes under the form [xa,xb,xc,ya,yb,yc]')
+            print ('-k : number of cores used in parallelization')
+            sys.exit(2)
         elif opt == "-f":
             File = str(arg)
         elif opt in "-n":
@@ -59,7 +64,7 @@ def main(argv):
     
     mat = []
     
-    for i in range(nData):
+    for i in range(nData):#Creation of the axes
         theta = math.pi/nData*i
         v = math.cos(theta)*A1+math.sin(theta)*A2
         vectors.append(v)
@@ -71,10 +76,10 @@ def main(argv):
     if nCores!=None:
         args+=["-k",str(nCores)]
         
-    [msdfile,MSD,Instants,Elements,Axes] = msd_umd_fast.main(args)
+    [msdfile,MSD,Instants,Elements,Axes] = msd_umd_fast.main(args)#Computation (and file creation) of the msd
 
     MSDsEl = [[] for _ in range(len(Elements))]
-    for el in range(len(Elements)):
+    for el in range(len(Elements)):#Calculation of the mean MSD for each axe
         coeff = 0
         MSDsEl
         for theta in range(nData):
