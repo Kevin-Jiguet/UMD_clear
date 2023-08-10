@@ -27,7 +27,7 @@ elif OS == "Windows":
 elif OS == "Darwin":
     LibraryName = 'c_bonds_full.dylib'
     
-current_path=os.path.abspath(__file__)#For all this to work, the file c_bonds_fullD.so must be in the same directory than gofr_umd
+current_path=os.path.abspath(__file__)
 path_split=current_path.split('/')
 path_red=path_split[1:-1]
 path_new=''
@@ -133,7 +133,7 @@ def main(argv):
         if opt == '-h':
             print ('Computation of the bonding map for each snapshot of a umd file')
             print ('Bond_fast_specific.py -f <UMD_filename> -s <Sampling_Frequency> -l <MaxLength> -i <InputFile> -n <NumCells> -p <Specifics> -k <nCores>')
-            print ('default values: -f output.umd.dat -s 1 -l None -p None')
+            print ('default values: -f output.umd.dat -s 1 -l None -p None -k None')
             print ('The input file contains the bond lengths for the different atom pairs. \n The option -l overwrites all the values of this file.')
             print ('-l : unique bonding length. Use in the case of not having an input file -i. ')
             print ('-n : states the number of sub-cells the script will work with. The default vomatically computed for optimal performances.')
