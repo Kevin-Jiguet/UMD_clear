@@ -33,7 +33,7 @@ elif OS == "Darwin":
 
 
 
-current_path=os.path.abspath(__file__)#For all this to work, the file < c_UMDprocess.so > must be in the same directory than this script
+current_path=os.path.abspath(__file__)
 path_split=current_path.split('/')
 path_red=path_split[1:-1]
 path_new=''
