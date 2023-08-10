@@ -7,7 +7,7 @@ import VaspParser_ML
 import LAMMPSParser_Standard
 import vibr_spectrum_umd_fast
 import umd_to_lammps
-import gofr_umd
+import gofr_new
 import Extract_umd
 #import analyze_gofr_forGUI
 import msd_umd_fast
@@ -1155,10 +1155,14 @@ class MainWindow(QMainWindow):
         self.s_g = QLineEdit("1")
         self.d_g = QLineEdit("0.01")
         self.i_g = QLineEdit("0")
-        self.gpu = False
 
-        self.gpubox = QCheckBox("Use gpu portage (be sure your computer is configured to handle it !)")
-        self.gpubox.stateChanged.connect(self.changedgpubox)
+
+        self.gofrCoresBox = QCheckBox("Precise the number of cores to be used for the parallelization")        
+        self.gofrCores = QLineEdit("")
+        self.gofrCores.setMaximumWidth(50)
+        self.gofrCores.setVisible(False)
+        self.gofrCoresBox.stateChanged.connect(self.gofrCoresBoxchange)
+
         
         selectButton.clicked.connect(partial(select_File,self.umdfileg_edit))
         computeButton.clicked.connect(self.compute_gofr)
@@ -1185,7 +1189,8 @@ class MainWindow(QMainWindow):
         layout.addItem(QSpacerItem(0,50))
         layout.addLayout(hboxIS)
         layout.addItem(QSpacerItem(0,50))
-        layout.addWidget(self.gpubox)
+        layout.addWidget(self.gofrCoresBox)
+        layout.addWidget(self.gofrCores)
         layout.addItem(QSpacerItem(0,50))
         layout.addWidget(computeButton)
 #        layout.addItem(QSpacerItem(0,50))
@@ -1194,11 +1199,11 @@ class MainWindow(QMainWindow):
         tab_widget.setLayout(layout)
         
         
-    def changedgpubox(self,state):
-        if state == 2:
-            self.gpu = True
-        else : 
-            self.gpu = False
+    def gofrCoresBoxchange(self,state):
+        if state ==2 :
+            self.gofrCores.setVisible(True)
+        else :
+            self.gofrCores.setVisible(False)
 
     def compute_gofr(self):
         if not os.path.isfile(self.umdfileg_edit.text()):
@@ -1210,9 +1215,9 @@ class MainWindow(QMainWindow):
         elif not self.i_g.text().isnumeric() or int(self.i_g.text())<0:
             self.gofrmessage.setText("Error : the initial step must be a positive integer.")
         else :
-            argv = ["-f",self.umdfileg_edit.text(),"-s",self.s_g.text(),"-d",self.d_g.text(),"-i",self.i_g.text(),"-g","use_gpu="+str(self.gpu)]
+            argv = ["-f",self.umdfileg_edit.text(),"-s",self.s_g.text(),"-d",self.d_g.text(),"-i",self.i_g.text(),"-k",self.gofrCores.text()]
             print("argv=",argv)
-            result = usefunction(gofr_umd,argv,self.gofrmessage)
+            result = usefunction(gofr_new,argv,self.gofrmessage)
             if result==True :
                 Name = self.umdfileg_edit.text().split("/")
                 name = Name[-1][:-8]+".gofr.dat"
