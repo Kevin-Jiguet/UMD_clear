@@ -276,7 +276,7 @@ def main(argv):
             print ('-m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
             print ('-t : nothing (default) or 1. In the latter case, and only if -r = 1,the angles of the molecules will be computed, their summit being the central atom. If this option is activated, the user needs to provide the corresponding umd file.')
             print ('-l : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
-            print ('-u : umd file used to calculate the angles.')
+            print ('-f : umd file used to calculate the angles.')
             sys.exit()
         elif opt in ("-b", "--bBondFile"):
             BondFile = str(arg)
