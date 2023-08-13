@@ -261,9 +261,9 @@ def main(argv):
     b = 0
     nCores = None
     try:
-        opts, arg = getopt.getopt(argv,"hf:u:s:c:a:m:r:t:b:p:k:",["fBondFile","uUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","pPopulation","tAngles","bBondslife","pPopulation","knCores"])
+        opts, arg = getopt.getopt(argv,"hb:f:s:c:a:m:r:t:l:p:k:",["bBondFile","fUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","pPopulation","tAngles","lBondslife","pPopulation","knCores"])
     except getopt.GetoptError:
-        print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
+        print ('speciation_and_angles.py -b <bond_filename> -f <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -l <Bondslife> -k <nCores>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
@@ -275,10 +275,10 @@ def main(argv):
             print ('-r : rings = 1 default, all adjacent atoms bind to central atoms ; rings = 0, polymerization, all adjacent atoms bind to central AND other adjacent atoms ; rings = x>0, all adjacent atoms bind to central then to other adjacent atoms to form a xth-coordination polyhedra')
             print ('-m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
             print ('-t : nothing (default) or 1. In the latter case, and only if -r = 1,the angles of the molecules will be computed, their summit being the central atom. If this option is activated, the user needs to provide the corresponding umd file.')
-            print ('-b : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
+            print ('-l : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
             print ('-u : umd file used to calculate the angles.')
             sys.exit()
-        elif opt in ("-f", "--fBondFile"):
+        elif opt in ("-b", "--bBondFile"):
             BondFile = str(arg)
             header = header + 'FILE: -f=' + BondFile
         elif opt in ("-s","--sNsteps"):
@@ -287,7 +287,7 @@ def main(argv):
             print('Will sample the MD trajectory every ',Nsteps,' steps')
         elif opt in ("-m","--mMinlife"):
             minlife = float(arg)
-        elif opt in ("-u","uUMDFile"):
+        elif opt in ("-f","fUMDFile"):
             UMDFile = str(arg)
         elif opt in ("-c","--Central"):
             header = header + ' -c=' + arg
@@ -301,7 +301,7 @@ def main(argv):
             t = int(arg)
         elif opt in("-p","--pPopulation"):
             p = int(arg)
-        elif opt in("-b","--bBondslife"):
+        elif opt in("-l","--lBondslife"):
             b = int(arg)
         elif opt in ("-r","--rRings"):
             rings = int(arg)
