@@ -268,7 +268,7 @@ def main(argv):
     for opt, arg in opts:
         if opt == '-h':
             print ('speciation_and_angles.py program to identify speciation, calculate angles, and evaluate the lifetime of bonds')
-            print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
+            print ('speciation_and_angles.py -b <bond_filename> -f <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -l <Bondslife> -k <nCores>')
             print ('default values: -f bonding.umd.dat -s 1 -m 5 -r 1')
             print ('the bond file contains the bonds relations for each snapshot. Computed with Bond_fast_specific.py.')
             print ("-c and -a : central and adjacent elements respectively. If one is 'all', every atom will be taken in account for this role.")
