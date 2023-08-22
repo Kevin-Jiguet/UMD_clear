@@ -30,7 +30,6 @@ for u in path_red:
 OS = platform.system()
 LibraryName =""
 
-
 if OS == "Linux":
     LibraryName = 'c_clusters.so'
 
@@ -40,8 +39,6 @@ elif OS == "Windows":
 elif OS == "Darwin":
     LibraryName = 'c_clusters.dylib'
     
-
-
 clust_lib = ctypes.cdll.LoadLibrary(join(path_new, LibraryName))
 clust_lib.fullclustering.argtypes = [ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_int),ctypes.POINTER(ctypes.c_int),ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int]
 clust_lib.fullclustering.restype = ctypes.POINTER(ctypes.c_int)
@@ -108,8 +105,8 @@ def analysis_subtab(Clusters,Step):#Creates a dictionnary whose keys are the ind
             else :
                 population[str(cluster)]=[[Step]]
         Step+=1
-    return population
-    
+    return population        
+
 def compute_angles(Bonds,MyCrystal,AllSnapshots,CentMin,CentMax,OutMin,OutMax,fa,TimeStep,Nsteps):#Calculates and writes the angles in a file.
     acell=MyCrystal.acell
     TotMean=0
@@ -206,14 +203,28 @@ def clustering(SnapshotBonds,SnapshotBondIndexes,SnapshotXCart,step,maxSteps,nat
     Angles = {}
     length = Np[0]
     #Converting C data into a python list of clusters
+    
     for i in range(1,length+1):
         atom=Np[i]
         if atom ==-1 :
             Clusters.append([])
+            if len(Clusters)>1:
+                if r==0:
+                    Clusters[-2].sort()
+                else:#Sorting except we leave the central atom as the first element
+                    coordAts=Clusters[-2][1:]
+                    coordAts.sort()
+                    Clusters[-2]=[Clusters[-2][0]]+coordAts
         else :   
             Clusters[-1].append(atom)
-
-    
+            
+    if r==0:
+        Clusters[-1].sort()
+    elif len(Clusters[0])>0 :
+        coordAts=Clusters[-1][1:]
+        coordAts.sort()
+        Clusters[-2]=[Clusters[-2][0]]+coordAts    
+        
     if r==1 and AngleCalc:#Calculating the angles within each cluster, as a dictionary whose entries are clusters and values are the angles
         SXp = (ctypes.c_double * len(SnapshotXCart))(*SnapshotXCart)
         Ap = clust_lib.angles(Np,len(Clusters),M,SXp,CIp,int(len(CentIndexes)/2),OIp,int(len(OutIndexes)/2),acell[0],acell[1],acell[2])
@@ -261,24 +272,24 @@ def main(argv):
     b = 0
     nCores = None
     try:
-        opts, arg = getopt.getopt(argv,"hb:f:s:c:a:m:r:t:l:p:k:",["bBondFile","fUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","pPopulation","tAngles","lBondslife","pPopulation","knCores"])
+        opts, arg = getopt.getopt(argv,"hf:u:s:c:a:m:r:t:b:p:k:",["fBondFile","uUMDFile","sSampling_Frequency", "cCentral","aAdjacent","mMinlife","rRings","pPopulation","tAngles","bBondslife","pPopulation","knCores"])
     except getopt.GetoptError:
-        print ('speciation_and_angles.py -b <bond_filename> -f <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -l <Bondslife> -k <nCores>')
+        print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
             print ('speciation_and_angles.py program to identify speciation, calculate angles, and evaluate the lifetime of bonds')
-            print ('speciation_and_angles.py -b <bond_filename> -f <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -l <Bondslife> -k <nCores>')
+            print ('speciation_and_angles.py -f <bond_filename> -u <umd_filename> -s <Sampling_Frequency> -c <Cations> -a <Anions> -m <MinLife> -r <Rings> -p <Population> -t <Angles> -b <Bondslife> -k <nCores>')
             print ('default values: -f bonding.umd.dat -s 1 -m 5 -r 1')
-            print ('the bond file contains the bonds relations for each snapshot, which is computed with Bond_fast_specific.py.')
+            print ('the bond file contains the bonds relations for each snapshot. Computed with Bond_fast_specific.py.')
             print ("-c and -a : central and adjacent elements respectively. If one is 'all', every atom will be taken in account for this role.")
             print ('-r : rings = 1 default, all adjacent atoms bind to central atoms ; rings = 0, polymerization, all adjacent atoms bind to central AND other adjacent atoms ; rings = x>0, all adjacent atoms bind to central then to other adjacent atoms to form a xth-coordination polyhedra')
             print ('-m : minimal duration of existence for a chemical species to be taken into account (fs) ; default 5')
             print ('-t : nothing (default) or 1. In the latter case, and only if -r = 1,the angles of the molecules will be computed, their summit being the central atom. If this option is activated, the user needs to provide the corresponding umd file.')
-            print ('-l : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
-            print ('-f : umd file used to calculate the angles (optional).')
+            print ('-b : nothing (default) or 1. In the latter case, the life time of each type of bonds will be evaluated and printed in a separate file.')
+            print ('-u : umd file used to calculate the angles.')
             sys.exit()
-        elif opt in ("-b", "--bBondFile"):
+        elif opt in ("-f", "--fBondFile"):
             BondFile = str(arg)
             header = header + 'FILE: -f=' + BondFile
         elif opt in ("-s","--sNsteps"):
@@ -287,7 +298,7 @@ def main(argv):
             print('Will sample the MD trajectory every ',Nsteps,' steps')
         elif opt in ("-m","--mMinlife"):
             minlife = float(arg)
-        elif opt in ("-f","fUMDFile"):
+        elif opt in ("-u","uUMDFile"):
             UMDFile = str(arg)
         elif opt in ("-c","--Central"):
             header = header + ' -c=' + arg
@@ -301,7 +312,7 @@ def main(argv):
             t = int(arg)
         elif opt in("-p","--pPopulation"):
             p = int(arg)
-        elif opt in("-l","--lBondslife"):
+        elif opt in("-b","--bBondslife"):
             b = int(arg)
         elif opt in ("-r","--rRings"):
             rings = int(arg)
