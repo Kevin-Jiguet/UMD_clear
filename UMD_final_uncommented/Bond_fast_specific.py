@@ -166,6 +166,10 @@ def main(argv):
     if not (os.path.isfile(UMDname)):
         print ('the UMD files ',UMDname,' does not exist')            
         sys.exit()
+    
+    if InputFile =='' and maxlength == None :
+        print("Please select an input file or specify a length of bonding.")
+        sys.exit()
 
     sys.stdout.write(str(os.cpu_count())+" cores are available. ")
     if nCores != None :
